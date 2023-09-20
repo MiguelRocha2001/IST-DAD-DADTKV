@@ -5,13 +5,17 @@ option csharp_namespace = "GrpcDADTKV";
 package dadtkv;
 
 service DADTKV {
-  rpc SayHello (HelloRequest) returns (HelloReply);
+  rpc TxSubmit (TxSubmitRequest) returns (ChatClientRegisterReply);
+  rpc Status (BcastMsgRequest) returns (BcastMsgReply);
 }
 
-message HelloRequest {
-  string name = 1;
+message TxSubmitRequest {
+  string client = 1;
+  repeated string reads = 2;
+  repeated DadInt writes = 3;
 }
 
-message HelloReply {
-  string message = 1;
+message DadInt {
+  string key = 1;
+  int64 value = 2;
 }

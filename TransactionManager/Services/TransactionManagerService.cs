@@ -5,12 +5,19 @@ using GrpcDADTKV;
 
 public class TransactionManagerService : DADTKV.DADTKVBase
 {
-    public override Task<HelloReply> SayHello(HelloRequest request, ServerCallContext context)
+    public override Task<TxSubmitReply> TxSubmit(TxSubmitRequest request, ServerCallContext context)
+{
+    Console.WriteLine($"Client: {request.Client}");
+    
+    // Construct the reply message with some sample data
+    var reply = new TxSubmitReply();
+    reply.Result.Add(new DadInt
     {
-        Console.WriteLine($"Request: {request.Name}");
-        return Task.FromResult(new HelloReply
-        {
-            Message = "Hello " + request.Name
-        });
-    }
+        Key = "sample_key",
+        Value = 12345
+    });
+
+    return Task.FromResult(reply);
+}
+
 }

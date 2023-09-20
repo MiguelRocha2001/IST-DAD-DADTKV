@@ -5,9 +5,9 @@ using GrpcDADTKVClient;
 using var channel = GrpcChannel.ForAddress("http://localhost:5000");
 
 var client = new DADTKV.DADTKVClient(channel);
-var reply = await client.SayHelloAsync(
-                  new HelloRequest { Name = "GreeterClient" });
+TxSubmitReply reply = await Task.FromResult(client.TxSubmit(
+                  new TxSubmitRequest {  }));
 
-Console.WriteLine("Greeting: " + reply.Message);
+Console.WriteLine("Reply: " + reply.Result);
 Console.WriteLine("Press any key to exit...");
 Console.ReadKey();
