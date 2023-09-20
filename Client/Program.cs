@@ -14,6 +14,7 @@ while (true)
 {
     // for some reason, running in debug mode, the client script file is not found (he assumes a different path, not sure why)
     IEnumerator<string> lines = File.ReadLines(clientScriptFilename).GetEnumerator(); 
+    
     // executes a script operation (line)
     while (lines.MoveNext())
     {
@@ -51,9 +52,15 @@ while (true)
                     dadInt.Value = long.Parse(CleanInput(writeOperAux.Split(',')[1]));
                     request.Writes.Add(dadInt);
                 }
+
                 Console.WriteLine("Sending transaction...");
-                client.TxSubmit(request); // sends the request to the server (transaction manager)
-                Console.WriteLine("Transaction sent!");
+                TxSubmitReply reply = await Task.FromResult(client.TxSubmit(request)); // sends the request to the server (transaction manager)
+                Console.WriteLine("Transaction result:");
+                foreach (DadInt dadInt in reply.Result) // prints the result of the transaction
+                {
+                    Console.WriteLine(dadInt.Key + " " + dadInt.Value);
+                }
+                Console.WriteLine("\n");
             }
             else
             {
