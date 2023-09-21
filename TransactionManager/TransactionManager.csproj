@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Protobuf Include="Protos\dadtkv.proto" GrpcServices="both" />
+    <Protobuf Include="Protos\DadTkvLeaseManagerService.proto" GrpcServices="Client" />
   </ItemGroup>
 
   <ItemGroup>

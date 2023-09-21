@@ -9,11 +9,17 @@ public class TransactionManagerService : DADTKV.DADTKVBase
 
     private class Lease
     {
-        public List<string> permissions;
+        public HashSet<string> permissions;
+
+        public Lease(HashSet<string> permissions)
+        {
+            this.permissions = permissions;
+        }
     }
 
-    // this structure represents the set of all TM nodes (excluding this one)
-    HashSet<string> brothers = new HashSet<string>(); // set of all brothers
+    private string nodeUrl = "CHANGE_ME"; // url of this node
+    HashSet<string> tmNodes = new HashSet<string>(); // set of all TM nodes (excluding this one)
+    HashSet<string> lmNodes = new HashSet<string>(); // set of all LM nodes
     HashSet<DadInt> storage = new HashSet<DadInt>(); // set of all dadInts stored in this node
     HashSet<Lease> leases = new HashSet<Lease>(); // set of all leases stored in this node
 
@@ -47,9 +53,21 @@ public class TransactionManagerService : DADTKV.DADTKVBase
             CheckForNecessaryLeasesForWriteOperations(writes);
     }
 
-    void RequestNecessaryLeases()
+    Lease RequestLease(HashSet<string> requestPermissions)
     {
-        throw new NotImplementedException();
+        HashSet<Task> requests = new HashSet<Task>();
+        foreach (string lmNode in lmNodes)
+        {
+            using var channel = GrpcChannel.ForAddress("http://localhost:" + lmNode);
+            var client = new DadTkvLeaseManagerService.DadTkvLeaseManagerServiceClient(channel);
+            RequestLeaseRequest request = new RequestLeaseRequest();
+            request.TransactionManager = nodeUrl;
+            request.Permissions.Add(requestPermissions);
+            Task<RequestLeaseReply> task = Task.FromResult(client.RequestLease(request)); // this should not blcock. Change not to block
+            requests.Add(task);
+        }
+        Task.WhenAny(requests);
+        return new Lease(requestPermissions);
     }
 
     /**
@@ -100,7 +118,7 @@ public class TransactionManagerService : DADTKV.DADTKVBase
     */
     void PropagateTransaction(string clientName, IEnumerable<string> reads, IEnumerable<DadInt> writes)
     {
-        foreach (string nodeUrl in brothers)
+        foreach (string nodeUrl in tmNodes)
         {
             using var channel = GrpcChannel.ForAddress("http://localhost:" + nodeUrl); // grpc channel
             var client = new DADTKV.DADTKVClient(channel); // grpc client
@@ -152,7 +170,9 @@ public class TransactionManagerService : DADTKV.DADTKVBase
         if (!hasLeases)
         {
             Console.WriteLine("Leases not available");
-            lease = RequestNecessaryLeases();
+            HashSet<string> permissions = request.Writes.Select(x => x.Key).ToHashSet()
+                .Union(request.Reads.AsEnumerable()).ToHashSet();
+            lease = RequestLease(permissions);
         }
         Console.WriteLine("Leases available");
         DoTransaction(request.Client, request.Reads, request.Writes);
