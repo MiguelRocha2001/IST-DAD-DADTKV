@@ -3,7 +3,8 @@ namespace LeaseManager.Services;
 using Grpc.Core;
 using GrpcDADTKV;
 using Grpc.Net.Client;
-using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 
 public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerServiceBase
 {
@@ -16,6 +17,21 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
     string node;
     HashSet<string> nodes;
     int promised = 0; // FIXME: use concurrency bullet proof
+    int accepted = 0; // FIXME: use concurrency bullet proof
+    int epoch = 0; // FIXME: use concurrency bullet proof
+    HashSet<Tuple<RequestLeaseRequest, int>> value; // FIXME: use concurrency bullet proof
+    private Monitor monitor; // monitor to be used by the threads that are waiting for the paxos instance to end
+
+    private class Lease
+    {
+        public HashSet<string> permissions;
+
+        public Lease(HashSet<string> permissions)
+        {
+            this.permissions = permissions;
+        }
+    }
+
 
     public LeaseManagerService(string node, HashSet<string> nodes)
     {
@@ -84,14 +100,15 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
     public override Task<RequestLeaseReply> RequestLease(RequestLeaseRequest request, ServerCallContext context)
     {
         Console.WriteLine($"Request: {request.TransactionManager}");
-        
-        // TODO: store this request and delay until next paxos instance is executed
-        // maybe use a pool request
-        // maybe put this thread to sleep and wake it up when the paxos instance is executed
 
         requests.Add(request);
+        monitor.Wait(); // wait until the paxos instance is executed
+        
+        // decided value is now available
+        RequestLeaseReply reply = new RequestLeaseReply();
+        reply.Permissions.Add(value);
 
-        return Task.FromResult(new RequestLeaseReply{});
+        return Task.FromResult();
     }
 
 
@@ -125,8 +142,22 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
         return Task.FromResult(new AcceptReply{});
     }
 
+    private void DefineNewValue()
+    {
+        value = requests; // FIXME: maybe use a better sorting rule
+    }
+
     public override Task<AcceptedReply> Accepted(AcceptedRequest request, ServerCallContext context)
     {
+        accepted++; // one more accept received
+        if (accepted > nodes.Count / 2) // majority
+        {
+            // end of paxos instance (Decide)
+            // wake up the thread that is waiting for the paxos instance to end (the one that is waiting for the lease request to be executed)
+            monitor.PulseAll();
+
+            DefineNewValue();
+        }
         return Task.FromResult(new AcceptedReply{});
     }
 }

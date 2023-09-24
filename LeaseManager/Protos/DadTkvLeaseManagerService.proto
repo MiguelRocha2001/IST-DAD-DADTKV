@@ -14,11 +14,19 @@ service DadTkvLeaseManagerService {
 }
 
 message RequestLeaseRequest {
-  string TransactionManager = 1;
+  string transactionManager = 1;
   repeated string permissions = 2;
 }
 
-message RequestLeaseReply {}
+message RequestLeaseReply {
+  repeated Permission permissions = 1;
+}
+
+message Permission {
+  string transactionManager = 1;
+  repeated string permissions = 2;
+  int32 epoch = 3;
+}
 
 
 message PrepareRequest {
@@ -29,21 +37,20 @@ message PrepareReply {}
 
 message PromiseRequest {
   int32 write_timestamp = 1;
-  int32 value = 2;
+  string value = 2;
 }
 
 message PromiseReply {}
 
 message AcceptRequest {
   int32 write_timestamp = 1;
-  int32 value = 2;
+  string value = 2;
 }
 
 message AcceptReply {}
 
 message AcceptedRequest {
   int32 write_timestamp = 1;
-  int32 value = 2;
 }
 
 message AcceptedReply {}
