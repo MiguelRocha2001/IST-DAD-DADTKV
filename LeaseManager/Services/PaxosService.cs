@@ -1,12 +1,12 @@
 namespace LeaseManager.Services;
 
 using Grpc.Core;
-using GrpcDADTKV;
+using GrpcPaxos;
 using Grpc.Net.Client;
 using System.Threading;
 using System.Threading.Tasks;
 
-public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerServiceBase
+public class PaxosService : Paxos.PaxosBase
 {
     // const string clientScriptFilename = "../configuration_sample";
     // int timeSlot;
@@ -33,9 +33,13 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
     // }
     //
     //
-    // public LeaseManagerService(string node, HashSet<string> nodes)
-    // {
-    //     ProcessConfigurationFile();
+    public PaxosService(IConfiguration configuration)
+    {
+        Console.WriteLine("FDSSSS");
+        int id = int.Parse(configuration["id"]);
+        Console.WriteLine(id);
+
+         //ProcessConfigurationFile();
     //
     //     void BroadcastPrepareRequest()
     //     {
@@ -54,7 +58,7 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
     //     {
     //         BroadcastPrepareRequest();
     //     }
-    // }
+    }
     //
     // void ProcessConfigurationFile()
     // {
