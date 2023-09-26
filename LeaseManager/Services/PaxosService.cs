@@ -6,35 +6,35 @@ using Grpc.Net.Client;
 using System.Threading;
 using System.Threading.Tasks;
 using GrpcDADTKV;
+using System.Reflection;
+using domain;
 
 public class PaxosService : Paxos.PaxosBase
 {
-
+    LeaseManagerService leaseManagerService;
     const string clientScriptFilename = "../configuration_sample";
     int timeSlot;
     int nOfSlots;
     // const string clientScriptFilename = "C:/Users/migas/Repos/dad-project/configuration_sample";
-    Boolean isLeader = false;
+    bool isLeader = false;
+    string previousLeader;
     string node;
     HashSet<string> nodes;
     int promised = 0; // FIXME: use concurrency bullet proof
     int accepted = 0; // FIXME: use concurrency bullet proof
     int epoch = 0; // FIXME: use concurrency bullet proof
-    public HashSet<Tuple<RequestLeaseRequest, int>> value; // FIXME: use concurrency bullet proof
+    IPaxosStep step;
     
-    private class Lease
-    {
-        public HashSet<string> permissions;
+    LeaseAtributionOrder value;
+
+
     
-        public Lease(HashSet<string> permissions)
-        {
-            this.permissions = permissions;
-        }
-    }
-    
-    public PaxosService(LeaseManagerService leaseManagerService)
+    public PaxosService(string node, HashSet<string> nodes, LeaseManagerService leaseManagerService)
     {
         Console.WriteLine("PaxosService constructor");
+        this.node = node;
+        this.nodes = nodes;
+        this.leaseManagerService = leaseManagerService;
 
         //ProcessConfigurationFile();
         //Console.WriteLine("Rquests: " + test.requests);
@@ -44,15 +44,39 @@ public class PaxosService : Paxos.PaxosBase
             Console.WriteLine("Broadcasting PrepareRequest");
             foreach (string node in nodes)
             {
-                using var channel = GrpcChannel.ForAddress(node);
-                var client = new Paxos.PaxosClient(channel);
-                client.Prepare(new PrepareRequest());
+                if (!node.Equals(this.node))
+                {
+                    Console.WriteLine("Node: " + node);
+                    Console.WriteLine("This node: " + this.node);
+                    Console.WriteLine("Sending PrepareRequest to " + node);
+                    using var channel = GrpcChannel.ForAddress(node);
+                    var client = new Paxos.PaxosClient(channel);
+                    client.Prepare(new PrepareRequest());
+                }
             }
         }
 
+        void DefineLeader()
+        {
+            int lowerPort = -1;
+            string leaderNode = "";
+            foreach (string node in nodes)
+            {
+                string port = node.Split(':')[2];
+                int portInt = int.Parse(port);
+                if (lowerPort == -1 || portInt < lowerPort)
+                {
+                    lowerPort = portInt;
+                    leaderNode = node;
+                    break;
+                }
+            }
+            isLeader = leaderNode == node;
+        }
+
         DefineLeader();
-        Thread.Sleep(5000); // wall time (make it configurable in the future)
-        if (isLeader)
+        Thread.Sleep(2000); // wall time (make it configurable in the future)
+        if (isLeader && previousLeader != null)
         {
             BroadcastPrepareRequest();
         }
@@ -92,13 +116,6 @@ public class PaxosService : Paxos.PaxosBase
         }
     }
 
-    void DefineLeader()
-    {
-        IEnumerable<int> nodesCastedToInt = nodes.Cast<int>(); // cast the nodes to int
-        int min = nodesCastedToInt.Min(); // get the min value
-        isLeader = min == int.Parse(node);
-    }
-
     public override Task<PrepareReply> Prepare(PrepareRequest request, ServerCallContext context)
     {
         void BroadcastAcceptRequest()
@@ -111,6 +128,8 @@ public class PaxosService : Paxos.PaxosBase
             }
         }
 
+        Console.WriteLine("Prepare request received");
+
         promised++; // one more promise accepted
         if (promised > nodes.Count / 2) // majority
         {
@@ -121,17 +140,27 @@ public class PaxosService : Paxos.PaxosBase
 
     public override Task<PromiseReply> Promise(PromiseRequest request, ServerCallContext context)
     {
+        Console.WriteLine("Promise request received");
+        if (request.Epoch > epoch)
+        {
+            step = new Step1(request.epoch, request.value);
+        }
+
         return Task.FromResult(new PromiseReply{});
     }
 
     public override Task<AcceptReply> Accept(AcceptRequest request, ServerCallContext context)
     {
+        Console.WriteLine("Accept request received");
         return Task.FromResult(new AcceptReply{});
     }
 
     private void DefineNewValue()
     {
-        //value = requests; // FIXME: maybe use a better sorting rule
+        List<RequestLeaseRequest> requests = leaseManagerService.requests;
+
+        HashSet<Tuple<string, Lease>> leases = new HashSet<Tuple<string, Lease>>();
+        value = new LeaseAtributionOrder(leases);
     }
 
     public override Task<AcceptedReply> Accepted(AcceptedRequest request, ServerCallContext context)
