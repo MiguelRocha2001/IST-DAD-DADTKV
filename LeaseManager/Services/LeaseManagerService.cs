@@ -6,6 +6,7 @@ using Grpc.Net.Client;
 using System.Threading;
 using System.Threading.Tasks;
 using GrpcPaxos;
+using domain;
 
 public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerServiceBase
 {
@@ -13,23 +14,18 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
     int timeSlot;
     int nOfSlots;
     // const string clientScriptFilename = "C:/Users/migas/Repos/dad-project/configuration_sample";
-    public List<RequestLeaseRequest> requests = new List<RequestLeaseRequest>();
+    public List<LeaseRequest> requests = new List<LeaseRequest>();
+    public ProposedValueAndTimestamp proposedValueAndTimestamp;
     Boolean isLeader = false;
     string node;
     HashSet<string> nodes;
-    HashSet<Tuple<RequestLeaseRequest, int>> value; // FIXME: use concurrency bullet proof
     //Monitor monitor; // monitor to be used by the threads that are waiting for the paxos instance to end
-    private class Lease
-    {
-        public HashSet<string> permissions;
-            public Lease(HashSet<string> permissions)
-        {
-            this.permissions = permissions;
-        }
-    }
+
     public LeaseManagerService(string node, HashSet<string> nodes)
     {
-        
+        this.node = node;
+        this.nodes = nodes;
+        this.proposedValueAndTimestamp = proposedValueAndTimestamp;
     }
     void ProcessConfigurationFile()
     {
@@ -64,21 +60,38 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
             }
         }
     }
-    void DefineLeader()
-    {
-        IEnumerable<int> nodesCastedToInt = nodes.Cast<int>(); // cast the nodes to int
-        int min = nodesCastedToInt.Min(); // get the min value
-        isLeader = min == int.Parse(node);
-    }
+
     public override Task<RequestLeaseReply> RequestLease(RequestLeaseRequest request, ServerCallContext context)
     {
         Console.WriteLine($"Request: {request.TransactionManager}");
-        requests.Add(request);
-        Monitor.Wait(this); // wait until the paxos instance is executed
+        
+        requests.Add(new LeaseRequest(request.TransactionManager, request.Permissions.ToHashSet()));
+
+        Monitor.Wait(this); // waits for the paxos instance to end
         
         // decided value is now available
         RequestLeaseReply reply = new RequestLeaseReply();
-        //reply.Permissions.Add(value);
+        
+        // builds the reply
+        List<GrpcDADTKV.Lease> leases = new List<GrpcDADTKV.Lease>();
+        LeaseAtributionOrder decidedValue = proposedValueAndTimestamp.value;
+        
+        foreach (Tuple<int, LeaseRequest> tuple in decidedValue.leases)
+        {
+            GrpcDADTKV.Lease lease = new GrpcDADTKV.Lease();
+            lease.Permissions.Add(tuple.Item2.permissions);
+            lease.Epoch = tuple.Item1;
+            lease.TransactionManager = tuple.Item2.transactionManager;
+            leases.Add(lease);
+        }
+        
+        reply.Leases.Add(leases);
         return Task.FromResult(reply);
+    }
+
+    public void WakeSleepingThreads()
+    {
+        Console.WriteLine("Waking up sleeping threads");
+        Monitor.PulseAll(this);
     }
 }

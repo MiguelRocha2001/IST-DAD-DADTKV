@@ -18,15 +18,21 @@ message PrepareRequest {
 message PrepareReply {}
 
 message PromiseRequest {
-  int32 epoch = 1;
-  string value = 2;
+  int32 write_timestamp = 1;
+  repeated Lease value = 2;
 }
 
 message PromiseReply {}
 
 message AcceptRequest {
   int32 write_timestamp = 1;
-  string value = 2;
+  repeated Lease leases = 2;
+}
+
+message Lease {
+  string transactionManager = 1;
+  repeated string permissions = 2;
+  int32 epoch = 3;
 }
 
 message AcceptReply {}

@@ -23,7 +23,7 @@ HashSet<string> nodes = new HashSet<string> // for testing purposes
         };
 
 LeaseManagerService leaseManagerService = new LeaseManagerService(node, nodes);
-PaxosService paxosService = new PaxosService(node, nodes);
+PaxosService paxosService = new PaxosService(node, nodes, leaseManagerService);
 
 // Add services to the container.
 builder.Services.AddGrpc();
