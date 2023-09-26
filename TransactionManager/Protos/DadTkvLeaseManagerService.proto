@@ -6,11 +6,20 @@ package dadtkv;
 
 service DadTkvLeaseManagerService {
   rpc RequestLease (RequestLeaseRequest) returns (RequestLeaseReply);
+
 }
 
 message RequestLeaseRequest {
-  string TransactionManager = 1;
+  string transactionManager = 1;
   repeated string permissions = 2;
 }
 
-message RequestLeaseReply {}
+message RequestLeaseReply {
+  repeated Permission permissions = 1;
+}
+
+message Permission {
+  string transactionManager = 1;
+  repeated string permissions = 2;
+  int32 epoch = 3;
+}

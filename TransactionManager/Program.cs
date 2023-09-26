@@ -1,5 +1,7 @@
+using GrpcDADTKV;
 using Microsoft.Net.Http.Headers;
 using TransactionManager.Services;
+using Grpc.Net.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,5 +15,11 @@ var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 app.MapGrpcService<TransactionManagerService>();
+
+using var channel = GrpcChannel.ForAddress("http://localhost:5000");
+var client = new DadTkvLeaseManagerService.DadTkvLeaseManagerServiceClient(channel);
+RequestLeaseRequest request = new RequestLeaseRequest();
+request.TransactionManager = "localhost:5000";
+client.RequestLease(request);
 
 app.Run();
