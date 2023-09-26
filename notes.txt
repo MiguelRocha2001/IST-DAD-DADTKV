@@ -1,0 +1,8 @@
+Que algoritmo devemos usar pra sincronizar os TransactionManager nodes;
+Quando deve começar uma nova iteraçao de paxos;
+Temos de resolver o caso em que um TM que executou uma transaçao, começou a replicar pros outros nodes, mas nao terminou, e portanto, um TM acha que ele executou uma coisa, mas o outro acha outra.
+
+Todos os TM vao receber os leases que foran atribuidos pra proxima epoch
+
+Pra definir o lider pode ser pelo id do LM
+
