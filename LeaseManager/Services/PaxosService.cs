@@ -8,45 +8,46 @@ using System.Threading.Tasks;
 using GrpcDADTKV;
 using System.Reflection;
 using domain;
+using AcceptedValue =  GrpcPaxos.PrepareReply.Types.AcceptedValue;
+using System.Threading.Channels;
 
 public class PaxosService : Paxos.PaxosBase
 {
     LeaseManagerService leaseManagerService;
     const string clientScriptFilename = "../configuration_sample";
+    int QUORUM_SIZE {get;} 
     int timeSlot;
     int nOfSlots;
     // const string clientScriptFilename = "C:/Users/migas/Repos/dad-project/configuration_sample";
-    bool isLeader = false;
-    string previousLeader = "";
     int nodeId;
     GrpcChannel[] nodes;
-    int promised = 0; // FIXME: use concurrency bullet proof
-    int accepted = 0; // FIXME: use concurrency bullet proof
     int currentEpoch = 1; // FIXME: use concurrency bullet proof
     int currentEpochId;
-    int myId;
-    //Liders liders;
+    int promisedEpochId;
+    object lockAcceptedValue = new object();
 
+    AcceptedValue? acceptedValue = null;
     
     public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService)
     {
-        Console.WriteLine("PaxosService constructor");
+        Console.WriteLine(nodeId);
 
+        this.QUORUM_SIZE = nodes.Count() / 2 + 1;
         this.nodeId = nodeId;
-        this.nodes = nodes;
+        //this.nodes = nodes; TODO: Uncomment
+        this.nodes = new GrpcChannel[]{
+            GrpcChannel.ForAddress("http://localhost:6001"),
+            GrpcChannel.ForAddress("http://localhost:6002"),
+        };
         this.leaseManagerService = leaseManagerService;
 
         //ProcessConfigurationFile();
         //Console.WriteLine("Rquests: " + test.requests);
-    
-
-        //DefineNewValue();
-    
-        string value = $"node{nodeId}";
-        Thread.Sleep(2000); // wall time (make it configurable in the future)
-
+    }
+    public void Init(){
         if (IsLeader())
         {
+            Console.WriteLine("Aqui");
             BroadcastPrepareRequest();
         }
     }
@@ -65,51 +66,29 @@ public class PaxosService : Paxos.PaxosBase
     }
 
 
-    private async void BroadcastPrepareRequest()
-    {
-        var prepareRequest = new PrepareRequest
-        {
-            Epoch = currentEpoch,
-            Id = currentEpochId,
-        };
-        List<AsyncUnaryCall<PrepareReply>> replies = new();
-
-        for (int id = 0; id < nodes.Count(); id++)
-        {
-            if (id == nodeId)
-                continue;
-            Console.WriteLine("Broadcasting PrepareRequest to node " + id);
-
-            
-            var client = new Paxos.PaxosClient(nodes[id]);
-            //var response = client.PrepareAsync(prepareRequest);
-            var response = client.PrepareAsync(prepareRequest);
-        }
-    }
 
     public override Task<PrepareReply> Prepare(PrepareRequest request, ServerCallContext context)
     {
         Console.WriteLine("Prepare request received");
-
-        // check leader number
-        // if leader number is greater than last leader number, send promise reply
-        int curReadTimestamp = leaseManagerService.proposedValueAndTimestamp.readTimestamp;
-        if (curReadTimestamp < request.Round)
+        if (promisedEpochId < request.Id)
         {
-            // send promise reply
-            string lider = liders.GetLeader(request.Round);
-            using var channel = GrpcChannel.ForAddress(lider);
-            var client = new Paxos.PaxosClient(channel);
-            PromiseRequest promiseRequest = new PromiseRequest();
-            promiseRequest.WriteTimestamp = leaseManagerService.proposedValueAndTimestamp.writeTimestamp; // adds the current write timestamp
-            promiseRequest.Value.AddRange(BuildLeases()); // adds the current value
-            client.Promise(promiseRequest);
+            promisedEpochId = request.Id; // overrides the last leader promised epoch id
+            PrepareReply prepareReply = new PrepareReply{ Id = promisedEpochId};
+
+            if (acceptedValue is not null)
+                prepareReply.AcceptedValue = acceptedValue;     
+
+            return Task.FromResult(prepareReply);
         }
-        return Task.FromResult(new PrepareReply{});
+
+        return Task.FromResult(new PrepareReply{
+            Id = promisedEpochId
+        }); 
     }
 
-    public override Task<PromiseReply> Promise(PromiseRequest request, ServerCallContext context)
+    /*public override Task<PromiseReply> Promise(PromiseRequest request, ServerCallContext context)
     {
+        /*
         Console.WriteLine("Promise request received");
         promised++; // one more promise received
 
@@ -126,32 +105,30 @@ public class PaxosService : Paxos.PaxosBase
         }
         
         return Task.FromResult(new PromiseReply{});
-    }
+    }*/
 
-    public override Task<AcceptReply> Accept(AcceptRequest request, ServerCallContext context)
+    public override Task<Empty> Accept(AcceptRequest request, ServerCallContext context)
     {
-        Console.WriteLine("Accept request received");
-
+        Console.WriteLine($"Accept request received with {request.Value}");
+        // if (request.Id < curre)
+        /*
         int curReadTimestamp = leaseManagerService.proposedValueAndTimestamp.readTimestamp;
         //Console.WriteLine("curReadTimestamp: " + curReadTimestamp);
-        Console.WriteLine("request.WriteTimestamp: " + request.WriteTimestamp);
+        //Console.WriteLine("request.WriteTimestamp: " + request.WriteTimestamp);
 
+        AcceptReply acceptReply = new AcceptReply();
         if (curReadTimestamp < request.WriteTimestamp) // accept this value
         {
-            DefineNewValue(request.Leases.ToList(), request.WriteTimestamp, myId);
-            // send accepted reply
-            string leader = liders.GetLeader(request.WriteTimestamp);
-            using var channel = GrpcChannel.ForAddress(leader);
-            var client = new Paxos.PaxosClient(channel);
-            AcceptedRequest acceptedRequest = new AcceptedRequest();
-            acceptedRequest.WriteTimestamp = leaseManagerService.proposedValueAndTimestamp.writeTimestamp; // adds the current write timestamp
-            acceptedRequest.Leases.AddRange(BuildLeases()); // adds the current value
-            Console.WriteLine("Sending accepted request to " + leader);
-            client.Accepted(acceptedRequest);
+            // overrides the paxos chosen value with the one from the leader (inside the accept request)
+            DefineNewValue(request.Leases.ToList(), request.WriteTimestamp, nodeId);
+        
+            // TODO: also send accepted reply to all learners
+            
             // TODO: warn lease manager request is accepted
         }
 
-        return Task.FromResult(new AcceptReply{});
+        return Task.FromResult(new AcceptReply{});*/
+        return Task.FromResult(new Empty());
     }
 
     /**
@@ -207,6 +184,7 @@ public class PaxosService : Paxos.PaxosBase
 
     public override Task<AcceptedReply> Accepted(AcceptedRequest request, ServerCallContext context)
     {
+        /*
         Console.WriteLine("Accepted request received");
 
         accepted++; // one more accept received
@@ -215,34 +193,102 @@ public class PaxosService : Paxos.PaxosBase
             // end of paxos instance (Decide)
             
         }
+        */
         return Task.FromResult(new AcceptedReply{});
+    }
+
+    private void  BroadcastPrepareRequest()
+    {
+        Console.WriteLine("BroadCast Start Prepare");
+        var prepareRequest = new PrepareRequest
+        {
+            Epoch = currentEpoch,
+            Id = currentEpochId,
+        };
+        //List<AsyncUnaryCall<PrepareReply>> replies = new(nodes.Count());
+
+        int count = 1;        
+        //AcceptedValue? acceptedValue = null;
+
+        for (int id = 0; id < nodes.Count(); id++)
+        {
+            // TODO: verify if node is sus
+            Console.WriteLine("Before continue");
+            if (id == nodeId)
+                continue;
+            Console.WriteLine("After continue");
+            Task.Run(async () => {
+
+                Console.WriteLine("Broadcasting PrepareRequest to node " + id);
+                var client = new Paxos.PaxosClient(nodes[id]);
+                var reply = await client.PrepareAsync(prepareRequest);
+
+                // Prepare Request not accepted
+                if (reply.Id > currentEpochId)
+                {
+                    // TODO: Retry broadcast prepare
+                    return;
+                }
+
+                if (count == QUORUM_SIZE) return; // no more promise msg processing required
+
+                Interlocked.Increment(ref count);
+
+                // Overrides the current value with the one from the acceptor
+                if (reply.AcceptedValue is not null)
+                {
+                    lock (lockAcceptedValue)
+                    {
+                        if (acceptedValue is null)
+                        {
+                            acceptedValue = reply.AcceptedValue;
+                        }
+                        else if (acceptedValue.Id < reply.AcceptedValue.Id)
+                        {
+                            acceptedValue = reply.AcceptedValue;
+                        }
+                    }
+                }
+
+                if (count == QUORUM_SIZE)
+                {
+                    BroadcastAcceptRequest(acceptedValue);
+                }
+            });   
+
+        }
     }
 
     /**
         Broadcasts the AcceptRequest to all nodes.
     */
-    void BroadcastAcceptRequest()
+    void BroadcastAcceptRequest(AcceptedValue? acceptedValue)
     {
-        Console.WriteLine("Broadcasting AcceptRequest");
-        foreach (string node in nodes)
-        {
-            if (!node.Equals(this.node))
-            {
-                using var channel = GrpcChannel.ForAddress(node);
-                var client = new Paxos.PaxosClient(channel);
+        var leases = acceptedValue is null ? GenerateLeases() : acceptedValue.Value;
 
-                AcceptRequest request = new AcceptRequest();
-                request.WriteTimestamp = leaseManagerService.proposedValueAndTimestamp.writeTimestamp;
-                request.Leases.AddRange(BuildLeases());
-                client.Accept(request);
-            }
+        AcceptRequest acceptRequest = new AcceptRequest{
+            Id = currentEpochId,
+            Value = leases
+        };
+
+        for (int id = 0; id < nodes.Count(); id++)
+        {
+            if (id == nodeId)
+                continue;
+        
+            GrpcChannel channel = nodes[id];
+            var client = new Paxos.PaxosClient(channel);
+            Console.WriteLine("Broadcasting AcceptRequest");
+            client.AcceptAsync(acceptRequest);
         }
     }
-
+    private string GenerateLeases(){
+        return $"Node: {nodeId}";
+    }
     /**
         Builds a Grpc.Paxosleases from the current proposed value.
     */
-    private List<GrpcPaxos.Lease> BuildLeases()
+    private List<GrpcPaxos.Lease> GenerateLeases2()
         {
             List<GrpcPaxos.Lease> leases = new List<GrpcPaxos.Lease>();
             LeaseAtributionOrder value = leaseManagerService.proposedValueAndTimestamp.value;

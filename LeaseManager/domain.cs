@@ -73,9 +73,10 @@ public class ProposedValueAndTimestamp
     }
 }
 
+/*
 public class Liders
 {
-    Grpc.Net.Client.GrpcChannel[] liders
+    Grpc.Net.Client.GrpcChannel[] liders;
     List<string> liders = new List<string>();
     public string currentLider;
     
@@ -103,3 +104,4 @@ public class Liders
         return liders[(round % liders.Count) - 1];
     }
 }
+*/

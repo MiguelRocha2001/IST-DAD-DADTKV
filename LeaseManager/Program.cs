@@ -3,6 +3,29 @@ using GrpcPaxos;
 using LeaseManager.Services;
 // using PaxosClient;
 
+static GrpcChannel[] GetChannels(HashSet<string> nodes)
+{
+    GrpcChannel[] channels = new GrpcChannel[nodes.Count];
+    int i = 0;
+    foreach (string node in nodes)
+    {
+        channels[i] = GrpcChannel.ForAddress(node);
+        i++;
+    }
+    return channels;
+}
+
+static int GetNodeId(HashSet<string> nodes, string node)
+{
+    int i = 0;
+    foreach (string n in nodes)
+    {
+        if (n == node) return i;
+        i++;
+    }
+    return -1;
+}
+
 foreach (string arg in args)
 {
     Console.WriteLine(arg);
@@ -23,7 +46,7 @@ HashSet<string> nodes = new HashSet<string> // for testing purposes
         };
 
 LeaseManagerService leaseManagerService = new LeaseManagerService();
-PaxosService paxosService = new PaxosService(node, nodes, leaseManagerService);
+PaxosService paxosService = new PaxosService(GetNodeId(nodes, node), GetChannels(nodes), leaseManagerService);
 
 // Add services to the container.
 builder.Services.AddGrpc();
@@ -42,6 +65,8 @@ using var channel = GrpcChannel.ForAddress("http://localhost:6001");
 var client = new Paxos.PaxosClient(channel);
 client.Prepare(new PrepareRequest());
 */
+
+paxosService.Init();
 
 app.Run();
 

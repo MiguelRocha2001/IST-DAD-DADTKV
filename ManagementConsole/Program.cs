@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿/*using System.Diagnostics;
 
 const string systemConfigFilePath = "../configuration_sample";
 // const string systemConfigFilePath = "C:/Users/migas/Repos/dad-project/configuration_sample";
@@ -53,4 +53,22 @@ while (true)
             string physicalWallTime = split[1];
         }
     }
+}*/
+
+int count = 0;
+List<Task> tasks = new();
+for (int i = 0; i < 30; i++){
+    var a = i;
+    tasks.Add(Task.Run(async () =>
+    {
+        await Task.Delay(1000);
+        Interlocked.Increment(ref count);
+        Console.WriteLine($"Count inside task {a} {count}");
+    }));
 }
+
+Task.WaitAll(tasks.ToArray());
+
+Console.WriteLine($"Count Outside task {count}");
+
+
