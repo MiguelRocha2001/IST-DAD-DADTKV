@@ -22,7 +22,7 @@ HashSet<string> nodes = new HashSet<string> // for testing purposes
             //"http://localhost:6003"
         };
 
-LeaseManagerService leaseManagerService = new LeaseManagerService(node, nodes);
+LeaseManagerService leaseManagerService = new LeaseManagerService();
 PaxosService paxosService = new PaxosService(node, nodes, leaseManagerService);
 
 // Add services to the container.

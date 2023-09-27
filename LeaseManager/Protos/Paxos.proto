@@ -13,6 +13,7 @@ service Paxos {
 
 message PrepareRequest {
   int32 epoch = 1;
+  int32 id = 2;
 }
 
 message PrepareReply {}
@@ -39,6 +40,7 @@ message AcceptReply {}
 
 message AcceptedRequest {
   int32 write_timestamp = 1;
+  repeated Lease leases = 2;
 }
 
 message AcceptedReply {}

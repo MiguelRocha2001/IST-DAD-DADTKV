@@ -72,3 +72,34 @@ public class ProposedValueAndTimestamp
         this.readTimestamp = readTimestamp;
     }
 }
+
+public class Liders
+{
+    Grpc.Net.Client.GrpcChannel[] liders
+    List<string> liders = new List<string>();
+    public string currentLider;
+    
+    public Liders(List<string> liders)
+    {
+        this.liders = liders;
+        currentLider = liders[0];
+    }
+
+    public void AdvanceLider()
+    {
+        int index = liders.IndexOf(currentLider);
+        if (index == liders.Count - 1)
+        {
+            currentLider = liders[0];
+        }
+        else
+        {
+            currentLider = liders[index + 1];
+        }
+    }
+
+    public string GetLeader(int round)
+    {
+        return liders[(round % liders.Count) - 1];
+    }
+}
