@@ -5,11 +5,8 @@ using GrpcPaxos;
 using Grpc.Net.Client;
 using System.Threading;
 using System.Threading.Tasks;
-using GrpcDADTKV;
-using System.Reflection;
 using domain;
 using AcceptedValue =  GrpcPaxos.AcceptedValue;
-using System.Threading.Channels;
 
 /**
     TODO:
@@ -51,7 +48,7 @@ public class PaxosService : Paxos.PaxosBase
     public void Init(){
         if (IsLeader())
         {
-            Console.WriteLine("Aqui");
+            //Console.WriteLine("Aqui");
             BroadcastPrepareRequest();
         }
     }
@@ -91,27 +88,6 @@ public class PaxosService : Paxos.PaxosBase
         }); 
     }
 
-    /*public override Task<PromiseReply> Promise(PromiseRequest request, ServerCallContext context)
-    {
-        /*
-        Console.WriteLine("Promise request received");
-        promised++; // one more promise received
-
-        int requestWriteTimestamp = request.WriteTimestamp; // this will be the new write timestamp (if value is used)
-        
-        int valueToBeProposed = leaseManagerService.proposedValueAndTimestamp.writeTimestamp; // this will be the new value (if value is used)
-        if (requestWriteTimestamp > valueToBeProposed) 
-        {
-            DefineNewValue(request.Value.ToList(), requestWriteTimestamp, myId);
-        }
-        if (promised > nodes.Count / 2) // majority
-        {
-            BroadcastAcceptRequest();
-        }
-        
-        return Task.FromResult(new PromiseReply{});
-    }*/
-
     public override Task<Empty> Accept(AcceptRequest request, ServerCallContext context)
     {
         Console.WriteLine($"Accept request received from {request.AcceptedValue.Id}");
@@ -125,55 +101,61 @@ public class PaxosService : Paxos.PaxosBase
         }
         else
         {
+            // Overrides the current local value with the one from the proposer
             acceptedValue = request.AcceptedValue;
-
-            // send accepted to proposer
-            GrpcChannel channel = GetNodeChannel(requestId);
-            var client = new Paxos.PaxosClient(channel);
-            AcceptedRequest acceptedRequest = new AcceptedRequest{
-                AcceptedValue = request.AcceptedValue,
-            };
-            client.Accepted(acceptedRequest);
-            Console.WriteLine("Accepted message sent to proposer");
             
-            // send accepted to learners (will be the rest of nodes)
-        }
-        // if (request.Id < curre)
-        /*
-        int curReadTimestamp = leaseManagerService.proposedValueAndTimestamp.readTimestamp;
-        //Console.WriteLine("curReadTimestamp: " + curReadTimestamp);
-        //Console.WriteLine("request.WriteTimestamp: " + request.WriteTimestamp);
-
-        AcceptReply acceptReply = new AcceptReply();
-        if (curReadTimestamp < request.WriteTimestamp) // accept this value
-        {
-            // overrides the paxos chosen value with the one from the leader (inside the accept request)
-            DefineNewValue(request.Leases.ToList(), request.WriteTimestamp, nodeId);
-        
-            // TODO: also send accepted reply to all learners
+            // Informs the Leader and Learners (which the value was accepted)
+            for (int id = 0; id < nodes.Count(); id++)
+            {
+                if (id == nodeId)
+                {
+                    Console.WriteLine("Skipping node " + id + " (self)");
+                    continue;
+                }
             
-            // TODO: warn lease manager request is accepted
-        }
+                GrpcChannel channel = nodes[id];
+                AcceptedRequest acceptedRequest = new AcceptedRequest{
+                    AcceptedValue = request.AcceptedValue,
+                };
+                var client = new Paxos.PaxosClient(channel);
+                client.AcceptedAsync(acceptedRequest);
+                Console.WriteLine("Accepted message sent to node " + id);
 
-        return Task.FromResult(new AcceptReply{});*/
+                InformLeaseManagerOnPaxosEnd();
+            }
+        }
         return Task.FromResult(new Empty());
     }
 
     
     public override Task<Empty> Accepted(AcceptedRequest request, ServerCallContext context)
     {
-        accepted++; // one more accept received
-        if (accepted == QUORUM_SIZE) // end of paxos instance (Decide)
-        {
-            Console.WriteLine("Quorum reached");
-            // Decide
-        }
         if (IsLeader())
             Console.WriteLine("Accepted request received from acceptor");
         else // Learner
             Console.WriteLine("Accepted request received from proposer");
 
+        accepted++; // one more accept received
+        Console.WriteLine("Qourum: " + QUORUM_SIZE);
+
+        // end of paxos instance (Decide)
+        if (accepted == (QUORUM_SIZE - 1))  // -1 because the leader does not send an accept message to itself
+        {
+            Console.WriteLine("Quorum reached");
+            InformLeaseManagerOnPaxosEnd();
+        }
+
         return Task.FromResult(new Empty{});
+    }
+
+    private void InformLeaseManagerOnPaxosEnd()
+    {
+        // Decide
+        lock(leaseManagerService) // aquires lock on the lease manager service, so its possible to wake pending threads
+        {
+            Monitor.PulseAll(leaseManagerService); // wakes pending threads
+            Console.WriteLine("Lease Manager notified on end of paxos instance");
+        }
     }
 
     /**
@@ -196,7 +178,7 @@ public class PaxosService : Paxos.PaxosBase
                 chosenOrder.AddLease(currentEpoch, leaseRequest);
             }
         }
-        leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, 1, 0);
+        //leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, 1, 0);
     }
 
     /**
@@ -223,7 +205,7 @@ public class PaxosService : Paxos.PaxosBase
                 chosenOrder.AddLease(currentEpoch, leaseRequest);
             }
         }
-        leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, writeTimestamp, readTimestamp);
+        //leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, writeTimestamp, readTimestamp);
     }
 
     private void  BroadcastPrepareRequest()
@@ -267,7 +249,7 @@ public class PaxosService : Paxos.PaxosBase
                         return;
                     }
 
-                    if (count == QUORUM_SIZE) return; // no more promise msg processing required
+                    if (count >= QUORUM_SIZE) return; // no more promise msg processing required
 
                     Interlocked.Increment(ref count);
 
@@ -284,7 +266,7 @@ public class PaxosService : Paxos.PaxosBase
                         }
                     }
 
-                    if (count == QUORUM_SIZE)
+                    if (count >= QUORUM_SIZE)
                     {
                         BroadcastAcceptRequest(acceptedValue);
                     }
@@ -294,9 +276,7 @@ public class PaxosService : Paxos.PaxosBase
                     Console.WriteLine(e.Message);
                     throw e;
                 }
-
             });   
-
         }
     }
 
@@ -331,27 +311,28 @@ public class PaxosService : Paxos.PaxosBase
     }
 
     // FIXME: adapt to new lease manager
-    private string GenerateLeases(){
+    private string GenerateLeases() {
         return $"Node: {nodeId}";
     }
     /**
         Builds a Grpc.Paxosleases from the current proposed value.
     */
     private List<GrpcPaxos.Lease> GenerateLeases2()
-        {
-            List<GrpcPaxos.Lease> leases = new List<GrpcPaxos.Lease>();
-            LeaseAtributionOrder value = leaseManagerService.proposedValueAndTimestamp.value;
+    {  
+        List<GrpcPaxos.Lease> leases = new List<GrpcPaxos.Lease>();
+        /*
+        LeaseAtributionOrder value = leaseManagerService.proposedValueAndTimestamp.value;
 
-            foreach (Tuple<int, LeaseRequest> assigment in value.leases)
-            {
-                GrpcPaxos.Lease grpcLease = new GrpcPaxos.Lease();
-                grpcLease.TransactionManager = assigment.Item2.transactionManager;
-                grpcLease.Permissions.AddRange(assigment.Item2.permissions);
-                leases.Add(grpcLease);
-            }
-            
-            return leases;
+        foreach (Tuple<int, LeaseRequest> assigment in value.leases)
+        {
+            GrpcPaxos.Lease grpcLease = new GrpcPaxos.Lease();
+            grpcLease.TransactionManager = assigment.Item2.transactionManager;
+            grpcLease.Permissions.AddRange(assigment.Item2.permissions);
+            leases.Add(grpcLease);
         }
+        */
+        return leases;
+    }
 
     private void ProcessConfigurationFile()
     {

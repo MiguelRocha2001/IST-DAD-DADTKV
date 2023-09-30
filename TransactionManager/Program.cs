@@ -1,4 +1,4 @@
-using GrpcDADTKV;
+using GrpcDADTKVLease;
 using Microsoft.Net.Http.Headers;
 using TransactionManager.Services;
 using Grpc.Net.Client;

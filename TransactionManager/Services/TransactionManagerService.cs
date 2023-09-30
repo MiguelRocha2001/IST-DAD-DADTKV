@@ -3,6 +3,7 @@ namespace TransactionManager.Services;
 using Grpc.Core;
 using GrpcDADTKV;
 using Grpc.Net.Client;
+using GrpcDADTKVLease;
 
 public class TransactionManagerService : DADTKV.DADTKVBase
 {

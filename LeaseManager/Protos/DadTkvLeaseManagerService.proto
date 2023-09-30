@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option csharp_namespace = "GrpcDADTKV";
+option csharp_namespace = "GrpcDADTKVLease";
 
 package dadtkv;
 
@@ -14,7 +14,8 @@ message RequestLeaseRequest {
 }
 
 message RequestLeaseReply {
-  repeated Lease leases = 1;
+  //repeated Lease leases = 1;
+  string value = 1;
 }
 
 message Lease {
