@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option csharp_namespace = "GrpcDADTKVLease";
+
+package dadtkv;
+
+service DadTkvLeaseManagerService {
+  rpc RequestLease (RequestLeaseRequest) returns (RequestLeaseReply);
+}
+
+message RequestLeaseRequest {
+  string transactionManager = 1;
+  repeated string permissions = 2;
+}
+
+message RequestLeaseReply {
+  //repeated Lease leases = 1;
+  string value = 1;
+}
+
+message Lease {
+  string transactionManager = 1;
+  repeated string permissions = 2;
+  int32 epoch = 3;
+}
