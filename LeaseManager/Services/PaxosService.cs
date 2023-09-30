@@ -104,27 +104,26 @@ public class PaxosService : Paxos.PaxosBase
             // Overrides the current local value with the one from the proposer
             acceptedValue = request.AcceptedValue;
             
-            // Informs the Leader and Learners (which the value was accepted)
-            for (int id = 0; id < nodes.Count(); id++)
-            {
-                if (id == nodeId)
-                {
-                    Console.WriteLine("Skipping node " + id + " (self)");
-                    continue;
-                }
-            
-                GrpcChannel channel = nodes[id];
-                AcceptedRequest acceptedRequest = new AcceptedRequest{
-                    AcceptedValue = request.AcceptedValue,
-                };
-                var client = new Paxos.PaxosClient(channel);
-                client.AcceptedAsync(acceptedRequest);
-                Console.WriteLine("Accepted message sent to node " + id);
-
-                InformLeaseManagerOnPaxosEnd();
-            }
+            BroadcastAcceptedMsg();
         }
         return Task.FromResult(new Empty());
+    }
+
+    /**
+        Broadcasts the Accepted message to all nodes (including itself).
+    */
+    private void BroadcastAcceptedMsg()
+    {
+        for (int id = 0; id < nodes.Count(); id++)
+        {    
+            GrpcChannel channel = nodes[id];
+            AcceptedRequest acceptedRequest = new AcceptedRequest{
+                AcceptedValue = acceptedValue,
+            };
+            var client = new Paxos.PaxosClient(channel);
+            client.AcceptedAsync(acceptedRequest);
+            Console.WriteLine("Accepted message sent to node " + id);
+        }
     }
 
     
