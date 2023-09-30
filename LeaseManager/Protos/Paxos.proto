@@ -8,7 +8,7 @@ service Paxos {
   rpc Prepare (PrepareRequest) returns (PrepareReply);
   //rpc Promise (PromiseRequest) returns (PromiseReply);
   rpc Accept (AcceptRequest) returns (Empty);
-  rpc Accepted (AcceptedRequest) returns (AcceptedReply);
+  rpc Accepted (AcceptedRequest) returns (Empty);
 }
 
 message Empty {}
@@ -19,16 +19,22 @@ message PrepareRequest {
 }
 
 message PrepareReply {
-  message AcceptedValue {
-    int32 id = 1;
-    //repeated Lease leases = 2;
-    string value = 2;
-  }
   int32 id = 1; 
   AcceptedValue acceptedValue = 2;
 }
 
 message AcceptRequest {
+  AcceptedValue acceptedValue = 1;	
+}
+
+message AcceptReply {}
+
+message AcceptedRequest {
+  AcceptedValue acceptedValue = 1;
+}
+
+
+message AcceptedValue {
   int32 id = 1;
   //repeated Lease leases = 2;
   string value = 2;
@@ -39,12 +45,3 @@ message Lease {
   repeated string permissions = 2;
   int32 epoch = 3;
 }
-
-message AcceptReply {}
-
-message AcceptedRequest {
-  int32 write_timestamp = 1;
-  repeated Lease leases = 2;
-}
-
-message AcceptedReply {}

@@ -8,9 +8,13 @@ using System.Threading.Tasks;
 using GrpcDADTKV;
 using System.Reflection;
 using domain;
-using AcceptedValue =  GrpcPaxos.PrepareReply.Types.AcceptedValue;
+using AcceptedValue =  GrpcPaxos.AcceptedValue;
 using System.Threading.Channels;
 
+/**
+    TODO:
+        - A Proposer should not initiate Paxos if it cannot communicate with at least a Quorum of Acceptors.
+*/
 public class PaxosService : Paxos.PaxosBase
 {
     LeaseManagerService leaseManagerService;
@@ -25,8 +29,8 @@ public class PaxosService : Paxos.PaxosBase
     int currentEpochId;
     int promisedEpochId;
     object lockAcceptedValue = new object();
-
     AcceptedValue? acceptedValue = null;
+    int accepted = 0;
     
     public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService)
     {
@@ -70,10 +74,11 @@ public class PaxosService : Paxos.PaxosBase
     public override Task<PrepareReply> Prepare(PrepareRequest request, ServerCallContext context)
     {
         Console.WriteLine("Prepare request received");
+
         if (promisedEpochId < request.Id)
         {
             promisedEpochId = request.Id; // overrides the last leader promised epoch id
-            PrepareReply prepareReply = new PrepareReply{ Id = promisedEpochId};
+            PrepareReply prepareReply = new PrepareReply{ Id = promisedEpochId };
 
             if (acceptedValue is not null)
                 prepareReply.AcceptedValue = acceptedValue;     
@@ -109,7 +114,30 @@ public class PaxosService : Paxos.PaxosBase
 
     public override Task<Empty> Accept(AcceptRequest request, ServerCallContext context)
     {
-        Console.WriteLine($"Accept request received with {request.Value}");
+        Console.WriteLine($"Accept request received from {request.AcceptedValue.Id}");
+
+        int requestId = request.AcceptedValue.Id;
+
+        // Already promised to another younger leader
+        if (requestId < promisedEpochId)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, "Already promised to another younger leader"));
+        }
+        else
+        {
+            acceptedValue = request.AcceptedValue;
+
+            // send accepted to proposer
+            GrpcChannel channel = GetNodeChannel(requestId);
+            var client = new Paxos.PaxosClient(channel);
+            AcceptedRequest acceptedRequest = new AcceptedRequest{
+                AcceptedValue = request.AcceptedValue,
+            };
+            client.Accepted(acceptedRequest);
+            Console.WriteLine("Accepted message sent to proposer");
+            
+            // send accepted to learners (will be the rest of nodes)
+        }
         // if (request.Id < curre)
         /*
         int curReadTimestamp = leaseManagerService.proposedValueAndTimestamp.readTimestamp;
@@ -129,6 +157,23 @@ public class PaxosService : Paxos.PaxosBase
 
         return Task.FromResult(new AcceptReply{});*/
         return Task.FromResult(new Empty());
+    }
+
+    
+    public override Task<Empty> Accepted(AcceptedRequest request, ServerCallContext context)
+    {
+        accepted++; // one more accept received
+        if (accepted == QUORUM_SIZE) // end of paxos instance (Decide)
+        {
+            Console.WriteLine("Quorum reached");
+            // Decide
+        }
+        if (IsLeader())
+            Console.WriteLine("Accepted request received from acceptor");
+        else // Learner
+            Console.WriteLine("Accepted request received from proposer");
+
+        return Task.FromResult(new Empty{});
     }
 
     /**
@@ -180,26 +225,10 @@ public class PaxosService : Paxos.PaxosBase
         }
         leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, writeTimestamp, readTimestamp);
     }
-    
-
-    public override Task<AcceptedReply> Accepted(AcceptedRequest request, ServerCallContext context)
-    {
-        /*
-        Console.WriteLine("Accepted request received");
-
-        accepted++; // one more accept received
-        if (accepted >= nodes.Count / 2) // majority
-        {
-            // end of paxos instance (Decide)
-            
-        }
-        */
-        return Task.FromResult(new AcceptedReply{});
-    }
 
     private void  BroadcastPrepareRequest()
     {
-        Console.WriteLine("BroadCast Start Prepare");
+        Console.WriteLine("Prepare BroadCast Start");
         var prepareRequest = new PrepareRequest
         {
             Epoch = currentEpoch,
@@ -213,47 +242,59 @@ public class PaxosService : Paxos.PaxosBase
         for (int id = 0; id < nodes.Count(); id++)
         {
             // TODO: verify if node is sus
-            Console.WriteLine("Before continue");
+            //Console.WriteLine("Before continue");
             if (id == nodeId)
+            {
+                Console.WriteLine("Skipping node " + id + " (self)");
                 continue;
-            Console.WriteLine("After continue");
+            }
+
+            //Console.WriteLine("After continue");
+            int idAux = id; // this is because the [id] variable is not captured by the lambda expression
             Task.Run(async () => {
-
-                Console.WriteLine("Broadcasting PrepareRequest to node " + id);
-                var client = new Paxos.PaxosClient(nodes[id]);
-                var reply = await client.PrepareAsync(prepareRequest);
-
-                // Prepare Request not accepted
-                if (reply.Id > currentEpochId)
+                Console.WriteLine("Broadcasting PrepareRequest to node " + idAux);
+                
+                try
                 {
-                    // TODO: Retry broadcast prepare
-                    return;
-                }
+                    var client = new Paxos.PaxosClient(nodes[idAux]);
+                    var reply = await client.PrepareAsync(prepareRequest);
+                    Console.WriteLine("PrepareReply received from node " + idAux);
 
-                if (count == QUORUM_SIZE) return; // no more promise msg processing required
-
-                Interlocked.Increment(ref count);
-
-                // Overrides the current value with the one from the acceptor
-                if (reply.AcceptedValue is not null)
-                {
-                    lock (lockAcceptedValue)
+                    // Prepare Request not accepted
+                    if (reply.Id > currentEpochId)
                     {
-                        if (acceptedValue is null)
+                        // TODO: Retry broadcast prepare
+                        return;
+                    }
+
+                    if (count == QUORUM_SIZE) return; // no more promise msg processing required
+
+                    Interlocked.Increment(ref count);
+
+                    // Overrides the current value with the one from the acceptor
+                    if (reply.AcceptedValue is not null)
+                    {
+                        lock (lockAcceptedValue)
                         {
-                            acceptedValue = reply.AcceptedValue;
-                        }
-                        else if (acceptedValue.Id < reply.AcceptedValue.Id)
-                        {
-                            acceptedValue = reply.AcceptedValue;
+                            if (acceptedValue is null || acceptedValue.Id < reply.AcceptedValue.Id)
+                            {
+                                acceptedValue = reply.AcceptedValue;
+                                Console.WriteLine("Local propose value is now: " + acceptedValue.Value);
+                            }
                         }
                     }
+
+                    if (count == QUORUM_SIZE)
+                    {
+                        BroadcastAcceptRequest(acceptedValue);
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    throw e;
                 }
 
-                if (count == QUORUM_SIZE)
-                {
-                    BroadcastAcceptRequest(acceptedValue);
-                }
             });   
 
         }
@@ -267,21 +308,29 @@ public class PaxosService : Paxos.PaxosBase
         var leases = acceptedValue is null ? GenerateLeases() : acceptedValue.Value;
 
         AcceptRequest acceptRequest = new AcceptRequest{
-            Id = currentEpochId,
-            Value = leases
+            AcceptedValue = new AcceptedValue{
+                Id = currentEpochId,
+                Value = leases,
+            },
         };
 
+        Console.WriteLine("Broadcasting AcceptRequest");
         for (int id = 0; id < nodes.Count(); id++)
         {
             if (id == nodeId)
+            {
+                Console.WriteLine("Skipping node " + id + " (self)");
                 continue;
+            }
         
             GrpcChannel channel = nodes[id];
             var client = new Paxos.PaxosClient(channel);
-            Console.WriteLine("Broadcasting AcceptRequest");
             client.AcceptAsync(acceptRequest);
+            Console.WriteLine("AcceptRequest sent to node " + id);
         }
     }
+
+    // FIXME: adapt to new lease manager
     private string GenerateLeases(){
         return $"Node: {nodeId}";
     }
@@ -336,5 +385,10 @@ public class PaxosService : Paxos.PaxosBase
                 }
             }
         }
+    }
+
+    private GrpcChannel GetNodeChannel(int id)
+    {
+        return nodes[id % nodes.Count()];
     }
 }
