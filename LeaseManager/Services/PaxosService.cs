@@ -6,12 +6,13 @@ using Grpc.Net.Client;
 using System.Threading;
 using System.Threading.Tasks;
 using domain;
-using AcceptedValue =  GrpcPaxos.AcceptedValue;
+using AcceptedValue = GrpcPaxos.AcceptedValue;
 
 /**
     Notes:
         - When the proposer broadcasts accept request, it increments the accepted value because the proposer accepts its own value.
         - When a acceptor receives an accept request, it increments the accepted value, checks if the quorum was reached and broadcasts the accepted message.
+        - Node only generates value when needed (if value is not yet generated and node needs to broadcast accept request);
     TODO:
         - A Proposer should not initiate Paxos if it cannot communicate with at least a Quorum of Acceptors.
         - Take precausion against cuncurrency
@@ -76,14 +77,14 @@ public class PaxosService : Paxos.PaxosBase
 
     private bool IsLeader()
     {
-        for( int id = 0; id < nodes.Count(); id++)
+        for(int id = 0; id < nodes.Count(); id++)
         {
            if(!IsSuspect(id))
-               return id == this.nodeId ? true : false;
+               return id == nodeId ? true : false;
         }
         return false;
     }
-    private bool IsSuspect(int id){
+    private bool IsSuspect(int id) {
         return id != 0;
     }
 
@@ -243,9 +244,10 @@ public class PaxosService : Paxos.PaxosBase
         //leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, writeTimestamp, readTimestamp);
     }
 
-    private void  BroadcastPrepareRequest()
+    private void BroadcastPrepareRequest()
     {
         Console.WriteLine("Prepare BroadCast Start");
+
         var prepareRequest = new PrepareRequest
         {
             Epoch = currentEpoch,
@@ -296,14 +298,14 @@ public class PaxosService : Paxos.PaxosBase
                             if (acceptedValue is null || acceptedValue.Id < reply.AcceptedValue.Id)
                             {
                                 acceptedValue = reply.AcceptedValue;
-                                Console.WriteLine("Local propose value is now: " + acceptedValue.Value);
+                                Console.WriteLine("Local value updated");
                             }
                         }
                     }
 
                     if (count >= QUORUM_SIZE)
                     {
-                        BroadcastAcceptRequest(acceptedValue);
+                        BroadcastAcceptRequest();
                     }
                 }
                 catch (System.Exception e)
@@ -319,15 +321,13 @@ public class PaxosService : Paxos.PaxosBase
         Broadcasts the AcceptRequest to all nodes.
         Increments the accepted value because the proposer accepts its own value.
     */
-    void BroadcastAcceptRequest(AcceptedValue? acceptedValue)
+    void BroadcastAcceptRequest()
     {
-        var leases = acceptedValue is null ? GenerateLeases() : acceptedValue.Value;
+        if (acceptedValue is null) // generate local value if necessary
+            GenerateNewValue();
 
         AcceptRequest acceptRequest = new AcceptRequest{
-            AcceptedValue = new AcceptedValue{
-                Id = currentEpochId,
-                Value = leases,
-            },
+            AcceptedValue = acceptedValue
         };
 
         Console.WriteLine("Broadcasting AcceptRequest");
@@ -349,15 +349,19 @@ public class PaxosService : Paxos.PaxosBase
     }
 
     // FIXME: adapt to new lease manager
-    private string GenerateLeases() {
+    private string GenerateLeases2() {
         return $"Node: {nodeId}";
     }
     /**
         Builds a Grpc.Paxosleases from the current proposed value.
     */
-    private List<GrpcPaxos.Lease> GenerateLeases2()
+    private void GenerateNewValue()
     {  
         List<GrpcPaxos.Lease> leases = new List<GrpcPaxos.Lease>();
+        acceptedValue = new AcceptedValue{
+            Id = currentEpochId,
+            Leases = {leases}
+        };
         /*
         LeaseAtributionOrder value = leaseManagerService.proposedValueAndTimestamp.value;
 
@@ -369,7 +373,6 @@ public class PaxosService : Paxos.PaxosBase
             leases.Add(grpcLease);
         }
         */
-        return leases;
     }
 
     private void ProcessConfigurationFile()

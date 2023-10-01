@@ -29,8 +29,6 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
             // builds the reply
             List<GrpcDADTKVLease.Lease> leases = new List<GrpcDADTKVLease.Lease>();
             //LeaseAtributionOrder decidedValue = proposedValueAndTimestamp.value;
-
-            reply.Value = "JUST_A_TEST";
             
             /*
             foreach (Tuple<int, LeaseRequest> tuple in decidedValue.leases)

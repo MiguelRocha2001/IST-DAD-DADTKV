@@ -14,8 +14,8 @@ message RequestLeaseRequest {
 }
 
 message RequestLeaseReply {
-  //repeated Lease leases = 1;
-  string value = 1;
+  repeated Lease leases = 1;
+  // string value = 1;
 }
 
 message Lease {

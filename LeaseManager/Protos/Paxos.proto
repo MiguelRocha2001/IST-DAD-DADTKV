@@ -35,8 +35,8 @@ message AcceptedRequest {
 
 message AcceptedValue {
   int32 id = 1;
-  //repeated Lease leases = 2;
-  string value = 2;
+  repeated Lease leases = 2;
+  // string value = 2;
 }
 
 message Lease {
