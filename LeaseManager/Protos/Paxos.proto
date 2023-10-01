@@ -6,7 +6,6 @@ package paxos;
 
 service Paxos {
   rpc Prepare (PrepareRequest) returns (PrepareReply);
-  //rpc Promise (PromiseRequest) returns (PromiseReply);
   rpc Accept (AcceptRequest) returns (Empty);
   rpc Accepted (AcceptedRequest) returns (Empty);
 }

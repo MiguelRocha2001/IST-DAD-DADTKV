@@ -45,11 +45,17 @@ public class PaxosService : Paxos.PaxosBase
         //ProcessConfigurationFile();
         //Console.WriteLine("Rquests: " + test.requests);
     }
-    public void Init(){
-        if (IsLeader())
+    
+    public async void Init() 
+    {
+        while (true)
         {
-            //Console.WriteLine("Aqui");
-            BroadcastPrepareRequest();
+            if (IsLeader())
+            {
+                //Console.WriteLine("Aqui");
+                BroadcastPrepareRequest();
+            }
+            await Task.Delay(5000);
         }
     }
 
@@ -65,8 +71,6 @@ public class PaxosService : Paxos.PaxosBase
     private bool IsSuspect(int id){
         return id != 0;
     }
-
-
 
     public override Task<PrepareReply> Prepare(PrepareRequest request, ServerCallContext context)
     {

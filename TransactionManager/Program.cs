@@ -16,10 +16,10 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 app.MapGrpcService<TransactionManagerService>();
 
-using var channel = GrpcChannel.ForAddress("http://localhost:5000");
+using var channel = GrpcChannel.ForAddress("http://localhost:7001");
 var client = new DadTkvLeaseManagerService.DadTkvLeaseManagerServiceClient(channel);
 RequestLeaseRequest request = new RequestLeaseRequest();
-request.TransactionManager = "localhost:5000";
+request.TransactionManager = "localhost:7001";
 client.RequestLease(request);
 
 app.Run();
