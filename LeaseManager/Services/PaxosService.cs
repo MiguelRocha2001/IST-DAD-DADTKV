@@ -9,8 +9,12 @@ using domain;
 using AcceptedValue =  GrpcPaxos.AcceptedValue;
 
 /**
+    Notes:
+        - When the proposer broadcasts accept request, it increments the accepted value because the proposer accepts its own value.
+        - When a acceptor receives an accept request, it increments the accepted value, checks if the quorum was reached and broadcasts the accepted message.
     TODO:
         - A Proposer should not initiate Paxos if it cannot communicate with at least a Quorum of Acceptors.
+        - Take precausion against cuncurrency
 */
 public class PaxosService : Paxos.PaxosBase
 {
@@ -22,7 +26,8 @@ public class PaxosService : Paxos.PaxosBase
     // const string clientScriptFilename = "C:/Users/migas/Repos/dad-project/configuration_sample";
     int nodeId;
     GrpcChannel[] nodes;
-    int currentEpoch = 1; // FIXME: use concurrency bullet proof
+    bool finishedPaxosEpoch = false;
+    int currentEpoch = 1;
     int currentEpochId;
     int promisedEpochId;
     object lockAcceptedValue = new object();
@@ -45,18 +50,28 @@ public class PaxosService : Paxos.PaxosBase
         //ProcessConfigurationFile();
         //Console.WriteLine("Rquests: " + test.requests);
     }
-    
+
     public async void Init() 
     {
-        while (true)
+        do
         {
+            Console.WriteLine("Starting New Paxos Epoch");
+
             if (IsLeader())
             {
-                //Console.WriteLine("Aqui");
                 BroadcastPrepareRequest();
             }
-            await Task.Delay(5000);
-        }
+
+            await Task.Delay(5000); // awaits until next paxos epoch
+            
+            while (finishedPaxosEpoch == false) // waits until the paxos epoch changes
+            {
+                await Task.Delay(10);
+            }
+            Console.WriteLine("Paxos Epoch Finished\n");
+            finishedPaxosEpoch = false;
+            accepted = 0;
+        } while (true); // runs Paxos service forever
     }
 
     private bool IsLeader()
@@ -94,6 +109,28 @@ public class PaxosService : Paxos.PaxosBase
 
     public override Task<Empty> Accept(AcceptRequest request, ServerCallContext context)
     {
+        /**
+            Broadcasts the Accepted message to all nodes, except self.
+        */
+        void BroadcastAcceptedMsg()
+        {
+            for (int id = 0; id < nodes.Count(); id++)
+            {    
+                if (id == nodeId)
+                {
+                    Console.WriteLine("Skipping node " + id + " (self)");
+                    continue;
+                }
+                GrpcChannel channel = nodes[id];
+                AcceptedRequest acceptedRequest = new AcceptedRequest{
+                    AcceptedValue = acceptedValue,
+                };
+                var client = new Paxos.PaxosClient(channel);
+                client.AcceptedAsync(acceptedRequest);
+                Console.WriteLine("Accepted message sent to node " + id);
+            }
+        }
+
         Console.WriteLine($"Accept request received from {request.AcceptedValue.Id}");
 
         int requestId = request.AcceptedValue.Id;
@@ -107,45 +144,40 @@ public class PaxosService : Paxos.PaxosBase
         {
             // Overrides the current local value with the one from the proposer
             acceptedValue = request.AcceptedValue;
-            
+
+            // increments the accepted value and checks if the quorum was reached
+            if (++accepted == QUORUM_SIZE) 
+            {
+                Console.WriteLine("Quorum reached");
+                InformLeaseManagerOnPaxosEnd();
+                finishedPaxosEpoch = true;
+            }
+
             BroadcastAcceptedMsg();
         }
         return Task.FromResult(new Empty());
     }
 
-    /**
-        Broadcasts the Accepted message to all nodes (including itself).
-    */
-    private void BroadcastAcceptedMsg()
-    {
-        for (int id = 0; id < nodes.Count(); id++)
-        {    
-            GrpcChannel channel = nodes[id];
-            AcceptedRequest acceptedRequest = new AcceptedRequest{
-                AcceptedValue = acceptedValue,
-            };
-            var client = new Paxos.PaxosClient(channel);
-            client.AcceptedAsync(acceptedRequest);
-            Console.WriteLine("Accepted message sent to node " + id);
-        }
-    }
-
     
     public override Task<Empty> Accepted(AcceptedRequest request, ServerCallContext context)
     {
+        Console.WriteLine("Accepted request received");
+        
+        /*
         if (IsLeader())
             Console.WriteLine("Accepted request received from acceptor");
         else // Learner
             Console.WriteLine("Accepted request received from proposer");
+        */
 
         accepted++; // one more accept received
-        Console.WriteLine("Qourum: " + QUORUM_SIZE);
 
         // end of paxos instance (Decide)
-        if (accepted == (QUORUM_SIZE - 1))  // -1 because the leader does not send an accept message to itself
+        if (accepted == QUORUM_SIZE)
         {
             Console.WriteLine("Quorum reached");
             InformLeaseManagerOnPaxosEnd();
+            finishedPaxosEpoch = true;
         }
 
         return Task.FromResult(new Empty{});
@@ -285,6 +317,7 @@ public class PaxosService : Paxos.PaxosBase
 
     /**
         Broadcasts the AcceptRequest to all nodes.
+        Increments the accepted value because the proposer accepts its own value.
     */
     void BroadcastAcceptRequest(AcceptedValue? acceptedValue)
     {
@@ -311,6 +344,8 @@ public class PaxosService : Paxos.PaxosBase
             client.AcceptAsync(acceptRequest);
             Console.WriteLine("AcceptRequest sent to node " + id);
         }
+
+        accepted++; // the proposer accepts its own value
     }
 
     // FIXME: adapt to new lease manager
