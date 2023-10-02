@@ -21,7 +21,7 @@ public class PaxosService : Paxos.PaxosBase
 {
     LeaseManagerService leaseManagerService;
     const string clientScriptFilename = "../configuration_sample";
-    int QUORUM_SIZE {get;} 
+    readonly int QUORUM_SIZE;
     int timeSlot;
     int nOfSlots;
     // const string clientScriptFilename = "C:/Users/migas/Repos/dad-project/configuration_sample";
@@ -34,7 +34,7 @@ public class PaxosService : Paxos.PaxosBase
     object lockAcceptedValue = new object();
     AcceptedValue? acceptedValue = null;
     int accepted = 0;
-    
+
     public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService)
     {
         Console.WriteLine(nodeId);
@@ -52,39 +52,34 @@ public class PaxosService : Paxos.PaxosBase
         //Console.WriteLine("Rquests: " + test.requests);
     }
 
-    public async void Init() 
+    public async void Init()
     {
-        do
+        CancellationTokenSource tokenSource = new();
+        CancellationToken token = new();
+
+        while (true)
         {
-            Console.WriteLine("Starting New Paxos Epoch");
-
-            if (IsLeader())
+            Task task = Task.Run(() =>
             {
-                BroadcastPrepareRequest();
-            }
-
-            await Task.Delay(5000); // awaits until next paxos epoch
-            
-            while (finishedPaxosEpoch == false) // waits until the paxos epoch changes
-            {
-                await Task.Delay(10);
-            }
-            Console.WriteLine("Paxos Epoch Finished\n");
-            finishedPaxosEpoch = false;
-            accepted = 0;
-        } while (true); // runs Paxos service forever
+                if (IsLeader())
+                    BroadcastPrepareRequest(tokenSource, token);
+            }, token);
+            await Task.Delay(1000);
+        }
     }
 
     private bool IsLeader()
     {
-        for(int id = 0; id < nodes.Count(); id++)
+        for (int id = 0; id < nodes.Count(); id++)
         {
-           if(!IsSuspect(id))
-               return id == nodeId ? true : false;
+            if (!IsSuspect(id))
+                return id == nodeId;
         }
         return false;
     }
-    private bool IsSuspect(int id) {
+
+    private bool IsSuspect(int id)
+    {
         return id != 0;
     }
 
@@ -95,17 +90,18 @@ public class PaxosService : Paxos.PaxosBase
         if (promisedEpochId < request.Id)
         {
             promisedEpochId = request.Id; // overrides the last leader promised epoch id
-            PrepareReply prepareReply = new PrepareReply{ Id = promisedEpochId };
+            PrepareReply prepareReply = new PrepareReply { Id = promisedEpochId };
 
             if (acceptedValue is not null)
-                prepareReply.AcceptedValue = acceptedValue;     
+                prepareReply.AcceptedValue = acceptedValue;
 
             return Task.FromResult(prepareReply);
         }
 
-        return Task.FromResult(new PrepareReply{
+        return Task.FromResult(new PrepareReply
+        {
             Id = promisedEpochId
-        }); 
+        });
     }
 
     public override Task<Empty> Accept(AcceptRequest request, ServerCallContext context)
@@ -116,14 +112,15 @@ public class PaxosService : Paxos.PaxosBase
         void BroadcastAcceptedMsg()
         {
             for (int id = 0; id < nodes.Count(); id++)
-            {    
+            {
                 if (id == nodeId)
                 {
                     Console.WriteLine("Skipping node " + id + " (self)");
                     continue;
                 }
                 GrpcChannel channel = nodes[id];
-                AcceptedRequest acceptedRequest = new AcceptedRequest{
+                AcceptedRequest acceptedRequest = new AcceptedRequest
+                {
                     AcceptedValue = acceptedValue,
                 };
                 var client = new Paxos.PaxosClient(channel);
@@ -147,7 +144,7 @@ public class PaxosService : Paxos.PaxosBase
             acceptedValue = request.AcceptedValue;
 
             // increments the accepted value and checks if the quorum was reached
-            if (++accepted == QUORUM_SIZE) 
+            if (++accepted == QUORUM_SIZE)
             {
                 Console.WriteLine("Quorum reached");
                 InformLeaseManagerOnPaxosEnd();
@@ -159,11 +156,11 @@ public class PaxosService : Paxos.PaxosBase
         return Task.FromResult(new Empty());
     }
 
-    
+
     public override Task<Empty> Accepted(AcceptedRequest request, ServerCallContext context)
     {
         Console.WriteLine("Accepted request received");
-        
+
         /*
         if (IsLeader())
             Console.WriteLine("Accepted request received from acceptor");
@@ -181,13 +178,13 @@ public class PaxosService : Paxos.PaxosBase
             finishedPaxosEpoch = true;
         }
 
-        return Task.FromResult(new Empty{});
+        return Task.FromResult(new Empty { });
     }
 
     private void InformLeaseManagerOnPaxosEnd()
     {
         // Decide
-        lock(leaseManagerService) // aquires lock on the lease manager service, so its possible to wake pending threads
+        lock (leaseManagerService) // aquires lock on the lease manager service, so its possible to wake pending threads
         {
             Monitor.PulseAll(leaseManagerService); // wakes pending threads
             Console.WriteLine("Lease Manager notified on end of paxos instance");
@@ -203,7 +200,7 @@ public class PaxosService : Paxos.PaxosBase
         LeaseAtributionOrder chosenOrder = new LeaseAtributionOrder();
 
         foreach (LeaseRequest leaseRequest in leaseRequests)
-        {        
+        {
             if (chosenOrder.Contains(leaseRequest))
             {
                 int maxEpoch = chosenOrder.GetGreatestAssignedLeaseEpoch(leaseRequest); // should be =/= -1
@@ -230,7 +227,7 @@ public class PaxosService : Paxos.PaxosBase
         LeaseAtributionOrder chosenOrder = new LeaseAtributionOrder();
 
         foreach (LeaseRequest leaseRequest in leaseRequests)
-        {        
+        {
             if (chosenOrder.Contains(leaseRequest))
             {
                 int maxEpoch = chosenOrder.GetGreatestAssignedLeaseEpoch(leaseRequest); // should be =/= -1
@@ -244,7 +241,7 @@ public class PaxosService : Paxos.PaxosBase
         //leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, writeTimestamp, readTimestamp);
     }
 
-    private void BroadcastPrepareRequest()
+    private void BroadcastPrepareRequest(CancellationTokenSource tokenSource, CancellationToken token)
     {
         Console.WriteLine("Prepare BroadCast Start");
 
@@ -255,57 +252,60 @@ public class PaxosService : Paxos.PaxosBase
         };
         //List<AsyncUnaryCall<PrepareReply>> replies = new(nodes.Count());
 
-        int count = 1;        
+        int count = 1;
         //AcceptedValue? acceptedValue = null;
 
         for (int id = 0; id < nodes.Count(); id++)
         {
             // TODO: verify if node is sus
-            //Console.WriteLine("Before continue");
             if (id == nodeId)
             {
-                Console.WriteLine("Skipping node " + id + " (self)");
+                //Console.WriteLine($"Skipping node {id}");
                 continue;
             }
 
-            //Console.WriteLine("After continue");
             int idAux = id; // this is because the [id] variable is not captured by the lambda expression
-            Task.Run(async () => {
+            Task.Run(async () =>
+            {
                 Console.WriteLine("Broadcasting PrepareRequest to node " + idAux);
-                
+
                 try
                 {
                     var client = new Paxos.PaxosClient(nodes[idAux]);
                     var reply = await client.PrepareAsync(prepareRequest);
                     Console.WriteLine("PrepareReply received from node " + idAux);
 
-                    // Prepare Request not accepted
                     if (reply.Id > currentEpochId)
                     {
-                        // TODO: Retry broadcast prepare
+                        // Restart BroadcastPrepareRequest
+                        tokenSource.Cancel();
                         return;
                     }
 
                     if (count >= QUORUM_SIZE) return; // no more promise msg processing required
 
-                    Interlocked.Increment(ref count);
-
-                    // Overrides the current value with the one from the acceptor
                     if (reply.AcceptedValue is not null)
                     {
                         lock (lockAcceptedValue)
                         {
+                            // Overrides the current value with the one from the acceptor
                             if (acceptedValue is null || acceptedValue.Id < reply.AcceptedValue.Id)
                             {
                                 acceptedValue = reply.AcceptedValue;
-                                Console.WriteLine("Local value updated");
+                                Console.WriteLine($"Local value updated to {acceptedValue}");
                             }
                         }
                     }
 
-                    if (count >= QUORUM_SIZE)
+                    // Double lock mechanism to prevent multiple BroadCastAcceptRequests
+                    if (count < QUORUM_SIZE)
                     {
-                        BroadcastAcceptRequest();
+                        lock (lockAcceptedValue)
+                        {
+                            count++;
+                            if (count == QUORUM_SIZE)
+                                BroadcastAcceptRequest();
+                        }
                     }
                 }
                 catch (System.Exception e)
@@ -313,7 +313,7 @@ public class PaxosService : Paxos.PaxosBase
                     Console.WriteLine(e.Message);
                     throw e;
                 }
-            });   
+            }, token);
         }
     }
 
@@ -326,7 +326,8 @@ public class PaxosService : Paxos.PaxosBase
         if (acceptedValue is null) // generate local value if necessary
             GenerateNewValue();
 
-        AcceptRequest acceptRequest = new AcceptRequest{
+        AcceptRequest acceptRequest = new AcceptRequest
+        {
             AcceptedValue = acceptedValue
         };
 
@@ -338,7 +339,7 @@ public class PaxosService : Paxos.PaxosBase
                 Console.WriteLine("Skipping node " + id + " (self)");
                 continue;
             }
-        
+
             GrpcChannel channel = nodes[id];
             var client = new Paxos.PaxosClient(channel);
             client.AcceptAsync(acceptRequest);
@@ -349,18 +350,20 @@ public class PaxosService : Paxos.PaxosBase
     }
 
     // FIXME: adapt to new lease manager
-    private string GenerateLeases2() {
+    private string GenerateLeases2()
+    {
         return $"Node: {nodeId}";
     }
     /**
         Builds a Grpc.Paxosleases from the current proposed value.
     */
     private void GenerateNewValue()
-    {  
+    {
         List<GrpcPaxos.Lease> leases = new List<GrpcPaxos.Lease>();
-        acceptedValue = new AcceptedValue{
+        acceptedValue = new AcceptedValue
+        {
             Id = currentEpochId,
-            Leases = {leases}
+            Leases = { leases }
         };
         /*
         LeaseAtributionOrder value = leaseManagerService.proposedValueAndTimestamp.value;
@@ -397,11 +400,11 @@ public class PaxosService : Paxos.PaxosBase
                     }
                 }
                 */
-                if(line.StartsWith('D'))
+                if (line.StartsWith('D'))
                 {
                     timeSlot = int.Parse(firstToken);
                 }
-                else if(line.StartsWith('S'))
+                else if (line.StartsWith('S'))
                 {
                     nOfSlots = int.Parse(firstToken);
                 }
