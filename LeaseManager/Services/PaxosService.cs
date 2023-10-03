@@ -65,7 +65,6 @@ public class PaxosService : Paxos.PaxosBase
                     BroadcastPrepareRequest(tokenSource, token);
             }, token);
             await Task.Delay(5000);
-            accepted = 0;
             Console.WriteLine("\n\n starting new paxos instance \n\n");
         }
     }
@@ -92,6 +91,7 @@ public class PaxosService : Paxos.PaxosBase
         if (promisedEpochId < request.Id)
         {
             promisedEpochId = request.Id; // overrides the last leader promised epoch id
+            accepted = 0; // resets the accepted count
             PrepareReply prepareReply = new PrepareReply { Id = promisedEpochId };
 
             if (acceptedValue is not null)
