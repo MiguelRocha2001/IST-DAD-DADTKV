@@ -64,7 +64,9 @@ public class PaxosService : Paxos.PaxosBase
                 if (IsLeader())
                     BroadcastPrepareRequest(tokenSource, token);
             }, token);
-            await Task.Delay(1000);
+            await Task.Delay(5000);
+            accepted = 0;
+            Console.WriteLine("\n\n starting new paxos instance \n\n");
         }
     }
 
@@ -143,8 +145,11 @@ public class PaxosService : Paxos.PaxosBase
             // Overrides the current local value with the one from the proposer
             acceptedValue = request.AcceptedValue;
 
+            Console.WriteLine("Accepted count: " + accepted);
+            Console.WriteLine("Quorum size: " + QUORUM_SIZE);
+
             // increments the accepted value and checks if the quorum was reached
-            if (++accepted == QUORUM_SIZE)
+            if (++accepted == QUORUM_SIZE - 1) // minus one because the proposer already accepted its own value
             {
                 Console.WriteLine("Quorum reached");
                 InformLeaseManagerOnPaxosEnd();
@@ -168,10 +173,8 @@ public class PaxosService : Paxos.PaxosBase
             Console.WriteLine("Accepted request received from proposer");
         */
 
-        accepted++; // one more accept received
-
         // end of paxos instance (Decide)
-        if (accepted == QUORUM_SIZE)
+        if (++accepted == QUORUM_SIZE)
         {
             Console.WriteLine("Quorum reached");
             InformLeaseManagerOnPaxosEnd();
