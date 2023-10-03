@@ -6,7 +6,7 @@ package paxos;
 
 service Paxos {
   rpc Prepare (PrepareRequest) returns (PrepareReply);
-  rpc Accept (AcceptRequest) returns (Empty);
+  rpc Accept (AcceptRequest) returns (AcceptReply);
   rpc Accepted (AcceptedRequest) returns (Empty);
 }
 
@@ -26,7 +26,9 @@ message AcceptRequest {
   AcceptedValue acceptedValue = 1;	
 }
 
-message AcceptReply {}
+message AcceptReply {
+  int32 id = 1;
+}
 
 message AcceptedRequest {
   AcceptedValue acceptedValue = 1;
