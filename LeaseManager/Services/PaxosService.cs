@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using domain;
 using AcceptedValue = GrpcPaxos.AcceptedValue;
+using System.Runtime.CompilerServices;
 
 /**
     Notes:
@@ -270,6 +271,7 @@ public class PaxosService : Paxos.PaxosBase
     private void BroadcastPrepareRequest(CancellationTokenSource tokenSource, CancellationToken token)
     {
         Console.WriteLine($"[{nodeId}] Prepare BroadCast Started.");
+
         var prepareRequest = new PrepareRequest
         {
             Epoch = currentEpoch,
@@ -290,55 +292,57 @@ public class PaxosService : Paxos.PaxosBase
             int idAux = id; // this is because the [id] variable is not captured by the lambda expression
             Task.Run(async () =>
             {
-
-                try
+                int backoffTimeout = 2000;
+                while (true) // loops while there is an exception
                 {
-                    Console.WriteLine($"[{nodeId}] Broadcasting PrepareRequest to node {idAux}");
-                    var client = new Paxos.PaxosClient(nodes[idAux]);
-                    var reply = await client.PrepareAsync(prepareRequest);
-                    Console.WriteLine($"[{nodeId}] PrepareReply received from node {idAux}");
-
-                    if (reply.Id > currentEpochId)
+                    try
                     {
-                        Console.WriteLine($"[{nodeId}] Current Epoch is outdated. Cancelling Prepare Broadcast.");
+                        Console.WriteLine($"[{nodeId}] Broadcasting PrepareRequest to node {idAux}");
+                        var client = new Paxos.PaxosClient(nodes[idAux]);
+                        var reply = await client.PrepareAsync(prepareRequest);
+                        Console.WriteLine($"[{nodeId}] PrepareReply received from node {idAux}");
 
-                        // Restart BroadcastPrepareRequest
-                        CalculateNewCurrentEpochId(reply.Id);
-                        tokenSource.Cancel();
-                        return;
-                    }
-
-                    if (count >= QUORUM_SIZE) return; // no more promise msg processing required
-
-                    if (reply.AcceptedValue is not null)
-                    {
-                        lock (lockAcceptedValue)
+                        if (reply.Id > currentEpochId)
                         {
-                            // Overrides the current value with the one from the acceptor
-                            if (acceptedValue is null || acceptedValue.Id < reply.AcceptedValue.Id)
+                            Console.WriteLine($"[{nodeId}] Current Epoch is outdated. Cancelling Prepare Broadcast.");
+
+                            // Restart BroadcastPrepareRequest
+                            CalculateNewCurrentEpochId(reply.Id);
+                            tokenSource.Cancel();
+                            return;
+                        }
+
+                        if (count >= QUORUM_SIZE) return; // no more promise msg processing required
+
+                        if (reply.AcceptedValue is not null)
+                        {
+                            lock (lockAcceptedValue)
                             {
-                                acceptedValue = reply.AcceptedValue;
-                                Console.WriteLine($"[{nodeId} Received PrepareReply from {idAux} with value {acceptedValue}.");
+                                // Overrides the current value with the one from the acceptor
+                                if (acceptedValue is null || acceptedValue.Id < reply.AcceptedValue.Id)
+                                {
+                                    acceptedValue = reply.AcceptedValue;
+                                    Console.WriteLine($"[{nodeId} Received PrepareReply from {idAux} with value {acceptedValue}.");
+                                }
                             }
                         }
-                    }
 
-                    // Double lock mechanism to prevent multiple BroadCastAcceptRequests
-                    if (count < QUORUM_SIZE)
-                    {
-                        lock (broadcastLock)
+                        // Double lock mechanism to prevent multiple BroadCastAcceptRequests
+                        if (count < QUORUM_SIZE)
                         {
-                            count++;
-                            if (count == QUORUM_SIZE)
-                                Task.Run(() => BroadcastAcceptRequest(), token);
+                            lock (broadcastLock)
+                            {
+                                count++;
+                                if (count == QUORUM_SIZE)
+                                    Task.Run(() => BroadcastAcceptRequest(), token);
+                            }
                         }
+                        return; // exits the while loop
                     }
-                }
-                catch (System.Exception e)
-                {
-                    // TODO: Handle Request timeout by creating another task.
-                    Console.WriteLine(e.Message);
-                    throw e;
+                    catch (Exception e)
+                    {
+                        backoffTimeout = await BroadcastExceptionHandler(e, backoffTimeout);
+                    }
                 }
             }, token);
         }
@@ -367,29 +371,43 @@ public class PaxosService : Paxos.PaxosBase
             var idAux = id;
             Task.Run(async () =>
             {
-                try
+                int backoffTimeout = 2000;
+                while (true) // loops while there is an exception
                 {
-                    Console.WriteLine($"[{nodeId}] Sending AcceptRequest to {idAux} with {acceptRequest.AcceptedValue}.");
-                    GrpcChannel channel = nodes[idAux];
-                    var client = new Paxos.PaxosClient(channel);
-                    AcceptReply reply = await client.AcceptAsync(acceptRequest);
-
-                    if (reply.Id > currentEpochId)
+                    try
                     {
-                        Console.WriteLine($"[{nodeId}] Current Epoch is outdated. Cancelling Accept Broadcast.");
-                        CalculateNewCurrentEpochId(reply.Id);
-                        tokenSource.Cancel();
-                        return;
+                        Console.WriteLine($"[{nodeId}] Sending AcceptRequest to {idAux} with {acceptRequest.AcceptedValue}.");
+                        GrpcChannel channel = nodes[idAux];
+                        var client = new Paxos.PaxosClient(channel);
+                        AcceptReply reply = await client.AcceptAsync(acceptRequest);
+
+                        if (reply.Id > currentEpochId)
+                        {
+                            Console.WriteLine($"[{nodeId}] Current Epoch is outdated. Cancelling Accept Broadcast.");
+                            CalculateNewCurrentEpochId(reply.Id);
+                            tokenSource.Cancel();
+                            return;
+                        }
+                        return; // exits the while loop
                     }
-                }
-                catch (Exception e)
-                {
-                    // TODO: Handle Request timeout by creating another task.
-                    Console.WriteLine(e.Message);
-                    throw e;
+                    catch (Exception e)
+                    {
+                        backoffTimeout = await BroadcastExceptionHandler(e, backoffTimeout);
+                    }
                 }
             }, ct);
         }
+    }
+
+    /**
+        Prints exception message, awaits for backoffTimeout and returns the new backoffTimeout.
+    */
+    async private Task<int> BroadcastExceptionHandler(Exception e, int backoffTimeout)
+    {
+        // Console.WriteLine(e.Message);
+        Console.WriteLine("Retrying in " + backoffTimeout + "ms");
+        await Task.Delay(backoffTimeout);
+        return backoffTimeout * 2;
     }
 
     private void BroadcastAcceptedRequest()
@@ -402,20 +420,23 @@ public class PaxosService : Paxos.PaxosBase
         for (int id = 0; id < nodes.Count(); id++)
         {
             var idAux = id;
-            Task.Run(() =>
+            Task.Run(async () =>
             {
-                try
+                int backoffTimeout = 2000;
+                while (true) // loops while there is an exception
                 {
-                    Console.WriteLine($"[{nodeId}] Sending AcceptedRequest to {idAux} with {acceptedRequest.AcceptedValue}.");
-                    GrpcChannel channel = nodes[idAux];
-                    var client = new Paxos.PaxosClient(channel);
-                    client.AcceptedAsync(acceptedRequest);
-                }
-                catch (Exception e)
-                {
-                    // TODO: Handle Request timeout by creating another task.
-                    Console.WriteLine(e.Message);
-                    throw e;
+                    try
+                    {
+                        Console.WriteLine($"[{nodeId}] Sending AcceptedRequest to {idAux} with {acceptedRequest.AcceptedValue}.");
+                        GrpcChannel channel = nodes[idAux];
+                        var client = new Paxos.PaxosClient(channel);
+                        client.AcceptedAsync(acceptedRequest);
+                        return; // exits the while loop
+                    }
+                    catch (Exception e)
+                    {
+                        backoffTimeout = await BroadcastExceptionHandler(e, backoffTimeout);
+                    }
                 }
             }, acceptedCt);
         }
