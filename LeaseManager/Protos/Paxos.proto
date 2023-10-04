@@ -31,7 +31,8 @@ message AcceptReply {
 }
 
 message AcceptedRequest {
-  AcceptedValue acceptedValue = 1;
+  int32 id = 1; // For logging proposes
+  AcceptedValue acceptedValue = 2;
 }
 
 

@@ -37,7 +37,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Additional configuration is required to successfully run gRPC on macOS.
 // For instructions on how to configure Kestrel and gRPC clients on macOS, visit https://go.microsoft.com/fwlink/?linkid=2099682
 
-string node = args[1];
 HashSet<string> nodes = new HashSet<string> // for testing purposes
         {
             "http://localhost:6001",
@@ -45,8 +44,9 @@ HashSet<string> nodes = new HashSet<string> // for testing purposes
             //"http://localhost:6003"
         };
 
+int nodeId = int.Parse(args[0]);
 LeaseManagerService leaseManagerService = new LeaseManagerService();
-PaxosService paxosService = new PaxosService(GetNodeId(nodes, node), GetChannels(nodes), leaseManagerService);
+PaxosService paxosService = new PaxosService(/*GetNodeId(nodes, node)*/nodeId, GetChannels(nodes), leaseManagerService);
 
 // Add services to the container.
 builder.Services.AddGrpc();
