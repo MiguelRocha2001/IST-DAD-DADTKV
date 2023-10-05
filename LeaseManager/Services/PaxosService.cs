@@ -42,6 +42,7 @@ public class PaxosService : Paxos.PaxosBase
     CancellationTokenSource acceptedTokenSource = new();
     CancellationToken acceptedCt;
     List<LeaseRequest> requests;
+    List<LeaseRequest> requestForThisEpoch;
 
     public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService, List<LeaseRequest> requests, AcceptedValue? acceptedValue)
     {
@@ -68,6 +69,23 @@ public class PaxosService : Paxos.PaxosBase
 
     public async void Init()
     {
+        void ResetProperties()
+        {
+            accepted = 0;
+            currentEpochId = nodeId; 
+            promisedEpochId = -1;
+            currentEpoch++;
+        }
+
+        void StoreRequestsForThisEpoch()
+        {
+            lock (requests)
+            {
+                requestForThisEpoch = new List<LeaseRequest>(requests);
+                requestForThisEpoch.AddRange(requests);
+            }
+        }
+
         var epochTimeInterval = TimeSpan.FromSeconds(10);
 
         // TODO: calculate state
@@ -75,11 +93,14 @@ public class PaxosService : Paxos.PaxosBase
         {
             await Task.Run(async () =>
             {
+                StoreRequestsForThisEpoch(); // to use only the requests until this point
+
                 var startTime = System.DateTime.Now;
                 Console.WriteLine($"[{nodeId}] Starting new paxos instance.");
                 if (IsLeader())
                 {
                     Console.WriteLine($"[{nodeId}] I am the leader.");
+                    GenerateNewValue();
                     BroadcastPrepareRequest(tokenSource, ct);
                 }
 
@@ -88,12 +109,8 @@ public class PaxosService : Paxos.PaxosBase
                 var delay = epochTimeInterval - (DateTime.Now - startTime);
                 Console.WriteLine($"[{nodeId}] Waiting {delay} till next epoch.");
                 await Task.Delay(delay);
-                // TODO: Create function for this
-                accepted = 0;
-                acceptedValue = null;
-                currentEpochId = nodeId; 
-                promisedEpochId = -1;
-                currentEpoch++;
+                
+                ResetProperties();
             }, ct);
             tokenSource = new();
             ct = tokenSource.Token;
@@ -312,7 +329,6 @@ public class PaxosService : Paxos.PaxosBase
         if (acceptedValue is null) // generate local value if necessary
             GenerateNewValue();
         */
-        GenerateNewValue();
 
         AcceptRequest acceptRequest = new AcceptRequest
         {
@@ -460,7 +476,7 @@ public class PaxosService : Paxos.PaxosBase
 
         List<GrpcPaxos.Lease> leases = new List<GrpcPaxos.Lease>();
 
-        foreach (LeaseRequest leaseRequest in requests)
+        foreach (LeaseRequest leaseRequest in requestForThisEpoch)
         {
             int epoch = currentEpoch;
             Lease lease = new Lease();
