@@ -20,18 +20,31 @@ public class TransactionManagerService : DADTKV.DADTKVBase
 
     private string nodeUrl = "CHANGE_ME"; // url of this node
     HashSet<string> tmNodes = new HashSet<string>(); // set of all TM nodes (excluding this one)
-    HashSet<string> lmNodes = new HashSet<string>(); // set of all LM nodes
     HashSet<DadInt> storage = new HashSet<DadInt>(); // set of all dadInts stored in this node
     HashSet<Lease> leases = new HashSet<Lease>(); // set of all leases stored in this node
+    GrpcChannel[] nodes; // array of all nodes
+
+    public TransactionManagerService(GrpcChannel[] nodes)
+    {
+        this.nodes = nodes;
+    }
 
     bool CheckForNecessaryLeasesForReadOperations(IEnumerable<string> reads)
     {
         foreach (string read in reads)
         {
+            bool found = false;
             foreach (Lease lease in leases)
             {
-                if (lease.permissions.Contains(read)) return false;
+                if (!lease.permissions.Contains(read)) 
+                    continue; // try next available lease
+                else
+                {
+                    found = true;
+                    break;
+                }
             }
+            if (!found) return false;
         }
         return true;
     }
@@ -40,10 +53,18 @@ public class TransactionManagerService : DADTKV.DADTKVBase
     {
         foreach (DadInt write in writes)
         {
+            bool found = false;
             foreach (Lease lease in leases)
             {
-                if (lease.permissions.Contains(write.Key)) return false;
+                if (!lease.permissions.Contains(write.Key)) 
+                    continue; // try next available lease
+                else
+                {
+                    found = true;
+                    break;
+                }
             }
+            if (!found) return false;
         }
         return true;
     }
@@ -57,9 +78,8 @@ public class TransactionManagerService : DADTKV.DADTKVBase
     Lease RequestLease(HashSet<string> requestPermissions)
     {
         HashSet<Task> requests = new HashSet<Task>();
-        foreach (string lmNode in lmNodes)
+        foreach (GrpcChannel channel in nodes)
         {
-            using var channel = GrpcChannel.ForAddress("http://localhost:" + lmNode);
             var client = new DadTkvLeaseManagerService.DadTkvLeaseManagerServiceClient(channel);
             RequestLeaseRequest request = new RequestLeaseRequest();
             request.TransactionManager = nodeUrl;

@@ -11,15 +11,26 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddGrpc();
 
+TransactionManagerService transactionManagerService = new TransactionManagerService(new GrpcChannel[] 
+{ 
+    GrpcChannel.ForAddress("http://localhost:6001"),
+    GrpcChannel.ForAddress("http://localhost:6002") 
+});
+
+builder.Services.AddGrpc();
+builder.Services.AddSingleton<TransactionManagerService>(transactionManagerService);
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-app.MapGrpcService<TransactionManagerService>();
 
+app.MapGrpcService<TransactionManagerService>();
+/*
 using var channel = GrpcChannel.ForAddress("http://localhost:7001");
 var client = new DadTkvLeaseManagerService.DadTkvLeaseManagerServiceClient(channel);
 RequestLeaseRequest request = new RequestLeaseRequest();
 request.TransactionManager = "localhost:7001";
 client.RequestLease(request);
+*/
 
 app.Run();

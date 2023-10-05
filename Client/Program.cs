@@ -8,7 +8,14 @@ const string clientScriptFilename = "C:/Users/migas/Repos/dad-project/Client/DAD
 // The port number must match the port of the gRPC server.
 using var channel = GrpcChannel.ForAddress("http://localhost:5000"); // grpc channel
 var client = new DADTKV.DADTKVClient(channel); // grpc client
+client.TxSubmit(new TxSubmitRequest
+{
+    Client = "client1",
+    Reads = { "x", "y" },
+    Writes = { new DadInt { Key = "x", Value = 1 }, new DadInt { Key = "y", Value = 2 } }
+}); // dummy request, to check if the server is running
 
+/*
 // infinite loop, executing the commands in the client script file
 while (true) 
 {
@@ -69,3 +76,4 @@ while (true)
         }
     }
 }
+*/
