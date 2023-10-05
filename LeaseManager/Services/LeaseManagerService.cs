@@ -9,7 +9,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
 {
     List<Lease> requests = new();
     GrpcChannel[] nodes = new GrpcChannel[]{
-        GrpcChannel.ForAddress("http://localhost:5001"),
+        GrpcChannel.ForAddress("http://localhost:5000"),
             // GrpcChannel.ForAddress("http://localhost:5002"),
     };
     int nodeId;
@@ -21,13 +21,18 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
 
     public override Task<Empty> RequestLease(Lease request, ServerCallContext context)
     {
-        // Console.WriteLine($"Request: {request.TransactionManager}");
+        Console.WriteLine($"Request: {request.TransactionManagerId}");
 
         lock (this)
         {
             requests.Add(request);
         }
         return Task.FromResult(new Empty());
+    }
+
+    public override Task<Empty> SendLeases(LeasesResponse request, ServerCallContext context)
+    {
+        throw new NotImplementedException();
     }
 
     public List<Lease> GetLeaseRequests()
@@ -54,6 +59,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
                     {
                         var client = new LeaseService.LeaseServiceClient(nodes[idAux]);
                         client.SendLeases(response);
+                        break;
                     }
                     catch (Exception e)
                     {
@@ -68,7 +74,6 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
     /**
         Prints exception message, awaits for backoffTimeout and returns the new backoffTimeout.
     */
-
     async private Task BroadcastExceptionHandler(int id, int tries)
     {
         Console.WriteLine($"[{nodeId}] Trying to resend Leases to TransactionManager: {id} [{tries}]");

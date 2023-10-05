@@ -201,6 +201,7 @@ public class PaxosService : Paxos.PaxosBase
 
         lock (lockAcceptedValue)
         {
+            Console.WriteLine($"AcceptedValue: {acceptedValue}");
             // Overrides the current value with the one from the acceptor
             if (acceptedValue is null || acceptedValue.Id < request.AcceptedValue.Id)
             {
@@ -224,18 +225,7 @@ public class PaxosService : Paxos.PaxosBase
         }
         return Task.FromResult(new Empty());
     }
-
-    private void InformLeaseManagerOnPaxosEnd()
-    {
-        // Decide
-        lock (leaseManagerService) // aquires lock on the lease manager service, so its possible to wake pending threads
-        {
-            Monitor.PulseAll(leaseManagerService); // wakes pending threads
-            Console.WriteLine("Lease Manager notified on end of paxos instance");
-
-        }
-    }
-
+    
     private void BroadcastPrepareRequest(CancellationTokenSource tokenSource, CancellationToken token)
     {
         Console.WriteLine($"[{nodeId}] Prepare BroadCast Started.");
