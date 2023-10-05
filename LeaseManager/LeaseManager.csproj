@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\DadTkvLeaseManagerService.proto" GrpcServices="server"/>
+    <Protobuf Include="Protos\LeaseService.proto" GrpcServices="both"/>
     <Protobuf Include="Protos\Paxos.proto" GrpcServices="both" />
   </ItemGroup>
 

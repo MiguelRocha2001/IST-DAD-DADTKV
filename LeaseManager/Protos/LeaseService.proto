@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-option csharp_namespace = "GrpcDADTKVLease";
+option csharp_namespace = "GrpcLeaseService";
 
-package leaseManagerService;
+package lease;
 
-service DadTkvLeaseManagerService {
+service LeaseService {
   rpc RequestLease (Lease) returns (Empty);
   rpc SendLeases (LeasesResponse) returns (Empty);
 }
@@ -13,7 +13,7 @@ message Empty {}
 
 message LeasesResponse {
      int32 epochId = 1;
-     repeated Lease = 2;
+     repeated Lease leases = 2;
 }
 
 message Lease {

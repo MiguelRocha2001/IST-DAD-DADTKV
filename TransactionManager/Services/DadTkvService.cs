@@ -5,7 +5,7 @@ using GrpcDADTKV;
 using Grpc.Net.Client;
 using GrpcDADTKVLease;
 
-public class TransactionManagerService : DADTKV.DADTKVBase
+public class DadTkvService : DADTKV.DADTKVBase
 {
 
     private class Lease

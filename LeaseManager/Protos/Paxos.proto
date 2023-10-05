@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "Protos/LeaseService.proto";
+
 option csharp_namespace = "GrpcPaxos";
 
 package paxos;
@@ -7,10 +9,8 @@ package paxos;
 service Paxos {
   rpc Prepare (PrepareRequest) returns (PrepareReply);
   rpc Accept (AcceptRequest) returns (AcceptReply);
-  rpc Accepted (AcceptedRequest) returns (Empty);
+  rpc Accepted (AcceptedRequest) returns (lease.Empty);
 }
-
-message Empty {}
 
 message PrepareRequest {
   int32 epoch = 1;
@@ -35,15 +35,8 @@ message AcceptedRequest {
   AcceptedValue acceptedValue = 2;
 }
 
-
 message AcceptedValue {
   int32 id = 1;
-  repeated Lease leases = 2;
-  // string value = 2;
+  repeated lease.Lease leases = 2;
 }
 
-message Lease {
-  string transactionManager = 1;
-  repeated string permissions = 2;
-  int32 epoch = 3;
-}

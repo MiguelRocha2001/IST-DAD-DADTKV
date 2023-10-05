@@ -1,51 +1,77 @@
 namespace LeaseManager.Services;
 
 using Grpc.Core;
-using GrpcDADTKVLease;
+using GrpcLeaseService;
 using Grpc.Net.Client;
-using System.Threading;
 using System.Threading.Tasks;
-using GrpcPaxos;
-using domain;
 
-public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerServiceBase
+public class LeaseManagerService : LeaseService.LeaseServiceBase
 {
-    private List<LeaseRequest> requests;
-    AcceptedValue? acceptedValue;
-    
-    public LeaseManagerService(List<LeaseRequest> requests, AcceptedValue? acceptedValue)
+    List<Lease> requests = new();
+    GrpcChannel[] nodes = new GrpcChannel[]{
+        GrpcChannel.ForAddress("http://localhost:5001"),
+            // GrpcChannel.ForAddress("http://localhost:5002"),
+    };
+    int nodeId;
+
+    public LeaseManagerService(int nodeId)
     {
-        this.requests = requests;
-        this.acceptedValue = acceptedValue;
+        this.nodeId = nodeId;
     }
-    
-    public override Task<RequestLeaseReply> RequestLease(RequestLeaseRequest request, ServerCallContext context)
+
+    public override Task<Empty> RequestLease(Lease request, ServerCallContext context)
     {
-        Console.WriteLine($"Request: {request.TransactionManager}");
+        // Console.WriteLine($"Request: {request.TransactionManager}");
 
         lock (this)
         {
-            requests.Add(new LeaseRequest(request.TransactionManager, request.Permissions.ToHashSet()));
-
-            Console.WriteLine($"Going to wait for a decision");
-            Monitor.Wait(this);
-            Console.WriteLine($"Decision received");
-            
-            // decided value is now available
-            RequestLeaseReply reply = new RequestLeaseReply();
-            
-            // builds the reply
-            List<GrpcDADTKVLease.Lease> leases = new List<GrpcDADTKVLease.Lease>();
-            
-            foreach (var leaseAux in acceptedValue.Leases)
-            {
-                GrpcDADTKVLease.Lease lease = new GrpcDADTKVLease.Lease();
-                lease.TransactionManager = leaseAux.TransactionManager;
-                lease.Permissions.Add(leaseAux.Permissions.ToArray());
-                leases.Add(lease);
-            }
-            
-            return Task.FromResult(reply);   
+            requests.Add(request);
         }
+        return Task.FromResult(new Empty());
+    }
+
+    public List<Lease> GetLeaseRequests()
+    {
+        lock (this)
+        {
+            List<Lease> requestsCopy = new List<Lease>(requests.Select(value => value.Clone()));
+            requests.RemoveAll(value => true);
+            return requestsCopy;
+        }
+    }
+
+    public void Send(LeasesResponse response)
+    {
+        for (int id = 0; id < nodes.Count(); id++)
+        {
+            var idAux = id;
+            Task.Run(async () =>
+            {
+                int requestTries = 1;
+                while (true)
+                {
+                    try
+                    {
+                        var client = new LeaseService.LeaseServiceClient(nodes[idAux]);
+                        client.SendLeases(response);
+                    }
+                    catch (Exception e)
+                    {
+                        await BroadcastExceptionHandler(nodeId, requestTries);
+                        requestTries++;
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+        Prints exception message, awaits for backoffTimeout and returns the new backoffTimeout.
+    */
+
+    async private Task BroadcastExceptionHandler(int id, int tries)
+    {
+        Console.WriteLine($"[{nodeId}] Trying to resend Leases to TransactionManager: {id} [{tries}]");
+        await Task.Delay(tries * 2 * 1000);
     }
 }

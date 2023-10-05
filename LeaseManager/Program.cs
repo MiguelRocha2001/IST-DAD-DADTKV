@@ -5,7 +5,7 @@ using GrpcPaxos;
 using LeaseManager.Services;
 // using PaxosClient;
 
-static GrpcChannel[] GetChannels(List<(int,string)> nodes)
+static GrpcChannel[] GetChannels(List<(int, string)> nodes)
 {
     GrpcChannel[] channels = new GrpcChannel[nodes.Count];
     int i = 0;
@@ -35,8 +35,8 @@ builder.WebHost.ConfigureKestrel(options =>
 List<LeaseRequest> requests = new List<LeaseRequest>();
 AcceptedValue acceptedValue = new AcceptedValue();
 
-LeaseManagerService leaseManagerService = new LeaseManagerService(requests, acceptedValue);
-PaxosService paxosService = new PaxosService(nodeId, GetChannels(nodes), leaseManagerService, requests, acceptedValue);
+LeaseManagerService leaseManagerService = new LeaseManagerService(nodeId);
+PaxosService paxosService = new PaxosService(nodeId, GetChannels(nodes), leaseManagerService);
 
 // Add services to the container.
 builder.Services.AddGrpc();
