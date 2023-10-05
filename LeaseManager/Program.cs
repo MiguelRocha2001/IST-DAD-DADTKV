@@ -1,3 +1,4 @@
+using domain;
 using System.Net;
 using Grpc.Net.Client;
 using GrpcPaxos;
@@ -31,9 +32,11 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Listen(IPAddress.Parse(ip), nodes[nodeId].Item1);
 });
 
+List<LeaseRequest> requests = new List<LeaseRequest>();
+AcceptedValue acceptedValue = new AcceptedValue();
 
-LeaseManagerService leaseManagerService = new LeaseManagerService();
-PaxosService paxosService = new PaxosService(nodeId, GetChannels(nodes), leaseManagerService);
+LeaseManagerService leaseManagerService = new LeaseManagerService(requests, acceptedValue);
+PaxosService paxosService = new PaxosService(nodeId, GetChannels(nodes), leaseManagerService, requests, acceptedValue);
 
 // Add services to the container.
 builder.Services.AddGrpc();

@@ -10,11 +10,19 @@ using domain;
 
 public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerServiceBase
 {
-    public List<LeaseRequest> requests = new List<LeaseRequest>();
-
+    private List<LeaseRequest> requests;
+    AcceptedValue? acceptedValue;
+    
+    public LeaseManagerService(List<LeaseRequest> requests, AcceptedValue? acceptedValue)
+    {
+        this.requests = requests;
+        this.acceptedValue = acceptedValue;
+    }
+    
     public override Task<RequestLeaseReply> RequestLease(RequestLeaseRequest request, ServerCallContext context)
     {
         Console.WriteLine($"Request: {request.TransactionManager}");
+
         lock (this)
         {
             requests.Add(new LeaseRequest(request.TransactionManager, request.Permissions.ToHashSet()));
@@ -28,20 +36,15 @@ public class LeaseManagerService : DadTkvLeaseManagerService.DadTkvLeaseManagerS
             
             // builds the reply
             List<GrpcDADTKVLease.Lease> leases = new List<GrpcDADTKVLease.Lease>();
-            //LeaseAtributionOrder decidedValue = proposedValueAndTimestamp.value;
             
-            /*
-            foreach (Tuple<int, LeaseRequest> tuple in decidedValue.leases)
+            foreach (var leaseAux in acceptedValue.Leases)
             {
-                GrpcDADTKV.Lease lease = new GrpcDADTKV.Lease();
-                lease.Permissions.Add(tuple.Item2.permissions);
-                lease.Epoch = tuple.Item1;
-                lease.TransactionManager = tuple.Item2.transactionManager;
+                GrpcDADTKVLease.Lease lease = new GrpcDADTKVLease.Lease();
+                lease.TransactionManager = leaseAux.TransactionManager;
+                lease.Permissions.Add(leaseAux.Permissions.ToArray());
                 leases.Add(lease);
             }
-            reply.Leases.Add(leases);
-            */
-
+            
             return Task.FromResult(reply);   
         }
     }
