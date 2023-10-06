@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+option csharp_namespace = "GrpcLeaseService";
+
+package lease;
+
+service LeaseService {
+  rpc RequestLease (Lease) returns (Empty);
+  rpc SendLeases (LeasesResponse) returns (Empty);
+}
+
+message Empty {}
+
+message LeasesResponse {
+     int32 epochId = 1;
+     repeated Lease leases = 2;
+}
+
+message Lease {
+  string transactionManagerId = 1;
+  repeated string requestIds = 2;
+}
+
+// message RequestLeaseReply {
+//   repeated Lease leases = 1;
+// }
