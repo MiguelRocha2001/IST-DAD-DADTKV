@@ -22,6 +22,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
     public override Task<Empty> RequestLease(Lease request, ServerCallContext context)
     {
         Console.WriteLine($"Request: {request.TransactionManagerId}");
+        Console.WriteLine($"Request: {request.RequestIds}");
 
         lock (this)
         {

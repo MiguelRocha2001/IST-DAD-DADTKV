@@ -64,7 +64,7 @@ public class PaxosService : Paxos.PaxosBase
         DateTime? startEpochTime = null;
         CancellationTokenSource tokenSource = new();
         CancellationToken ct = tokenSource.Token;
-        TimeSpan epochTimeInterval = TimeSpan.FromSeconds(30);
+        TimeSpan epochTimeInterval = TimeSpan.FromSeconds(10);
 
         void ResetProperties()
         {
@@ -73,6 +73,7 @@ public class PaxosService : Paxos.PaxosBase
             currentEpoch++;
             startEpochTime = null;
             acceptedValues.Clear();
+            highestAcceptedValue = null;
         }
 
         while (true)
@@ -143,7 +144,6 @@ public class PaxosService : Paxos.PaxosBase
 
         lock (lockPrepareMethod)
         {
-
             if (request.Id > promisedEpochId)
             {
                 Console.WriteLine($"[{nodeId}] PrepareRequest accepted from {request.Id % nodes.Count()}");

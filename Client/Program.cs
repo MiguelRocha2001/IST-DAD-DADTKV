@@ -15,6 +15,14 @@ client.TxSubmit(new TxSubmitRequest
     Writes = { new DadInt { Key = "x", Value = 1 }, new DadInt { Key = "y", Value = 2 } }
 }); // dummy request, to check if the server is running
 
+Thread.Sleep(4000);
+
+client.TxSubmit(new TxSubmitRequest
+{
+    Client = "client2",
+    Reads = { "x", "y", "w" }
+}); // dummy request, to check if the server is running
+
 /*
 // infinite loop, executing the commands in the client script file
 while (true) 

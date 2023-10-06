@@ -23,7 +23,8 @@ message PrepareReply {
 }
 
 message AcceptRequest {
-  AcceptedValue acceptedValue = 1;	
+  int32 epoch = 1;
+  AcceptedValue acceptedValue = 2;	
 }
 
 message AcceptReply {
@@ -31,8 +32,9 @@ message AcceptReply {
 }
 
 message AcceptedRequest {
-  int32 id = 1; // For logging proposes
-  AcceptedValue acceptedValue = 2;
+  int32 epoch = 1;
+  int32 id = 2; // For logging proposes
+  AcceptedValue acceptedValue = 3;
 }
 
 message AcceptedValue {
