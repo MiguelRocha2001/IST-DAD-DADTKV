@@ -53,6 +53,8 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
 
         Console.WriteLine("Received new assigment of leases");
 
+        Console.WriteLine("Leases: " + request.Leases);
+
         RemoveConflictedLeases(request.Leases);
         
         HashSet<Lease> leases = ExtractTransactionManagerLeases();

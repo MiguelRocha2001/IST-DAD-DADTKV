@@ -164,11 +164,12 @@ public class DadTkvService : DADTKV.DADTKVBase
                 HashSet<string> permissions = request.Writes.Select(x => x.Key).ToHashSet()
                     .Union(request.Reads.AsEnumerable()).ToHashSet();
                 RequestLease(permissions);
+                lock (lockObject) 
+                {
+                    Monitor.Wait(lockObject); // waits for some other thread wake it up when new leases are available
+                }
             }
-            lock (lockObject) 
-            {
-                Monitor.Wait(lockObject); // waits for some other thread wake it up when new leases are available
-            }
+            else break;
         } while (!CheckForNecessaryLeases(request.Reads, request.Writes));
         
         Console.WriteLine("Leases available");
