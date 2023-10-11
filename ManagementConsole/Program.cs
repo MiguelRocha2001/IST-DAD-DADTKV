@@ -2,7 +2,7 @@
 
 const string systemConfigFilePath = "../configuration_sample";
 // const string systemConfigFilePath = "C:/Users/migas/Repos/dad-project/configuration_sample";
-const string CLIENT_PROCESS_FILE_PATH = "TODO";
+const string CLIENT_PROCESS_FILE_PATH = "../Client/bin/Debug/net6.0/Client";
 const string TRANSACTION_MANAGER_PROCESS_FILE_PATH = "../TransactionManager/bin/Debug/net6.0/TransactionManager";
 const string LEASE_MANAGER_PROCESS_FILE_PATH = "../LeaseManager/bin/Debug/net6.0/LeaseManager";
 
@@ -93,27 +93,31 @@ try
             string processType = processConfig[2];
             string nodeId = processConfig[1];
 
-            if (processType == "T" || processType == "L")
-            {
-                string href = processConfig[3];
-                
-                Process newProcess = new Process();
-                processes.Add(newProcess);
+            string thirdArgument = processConfig[3];
+            
+            Process newProcess = new Process();
+            processes.Add(newProcess);
 
-                if (processType == "T") // transaction manager
-                {
-                    newProcess.StartInfo.FileName = TRANSACTION_MANAGER_PROCESS_FILE_PATH;
-                    newProcess.StartInfo.Arguments = BuildTransactionManagerArguments(nodeId);
-                }
-                else // lease manager
-                {
-                    newProcess.StartInfo.FileName = LEASE_MANAGER_PROCESS_FILE_PATH;
-                    newProcess.StartInfo.Arguments = BuildLeaseManagerArguments(nodeId);
-                }
-                                                 
-                newProcess.Start();
-                Console.WriteLine("Process started.");
+            if (processType == "T") // Transaction Manager
+            {
+                newProcess.StartInfo.FileName = TRANSACTION_MANAGER_PROCESS_FILE_PATH;
+                newProcess.StartInfo.Arguments = BuildTransactionManagerArguments(nodeId);
             }
+            else if (processType == "L") // Lease Manager
+            {
+                newProcess.StartInfo.FileName = LEASE_MANAGER_PROCESS_FILE_PATH;
+                newProcess.StartInfo.Arguments = BuildLeaseManagerArguments(nodeId);
+            }
+            else // Client
+            {
+                string clientScript = processConfig[3];
+                newProcess.StartInfo.FileName = CLIENT_PROCESS_FILE_PATH;
+                newProcess.StartInfo.Arguments = clientScript;
+            }
+                                                
+            newProcess.Start();
+            Console.WriteLine("Process started.");
+            
         }
     }
 }

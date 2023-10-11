@@ -2,11 +2,12 @@
 using Grpc.Net.Client;
 using GrpcDADTKVClient;
 
-// const string clientScriptFilename = "./DADTKV_client_script_sample";
-const string clientScriptFilename = "C:/Users/migas/Repos/dad-project/Client/DADTKV_client_script_sample";
+Thread.Sleep(3000);
+
+string clientScriptFilename = args[0];
 
 // The port number must match the port of the gRPC server.
-using var channel = GrpcChannel.ForAddress("http://localhost:5000"); // grpc channel
+using var channel = GrpcChannel.ForAddress("http://localhost:5001"); // grpc channel
 var client = new DADTKV.DADTKVClient(channel); // grpc client
 client.TxSubmit(new TxSubmitRequest
 {
