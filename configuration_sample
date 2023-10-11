@@ -13,8 +13,8 @@
 # and a URL for g-RPC calls.
 P TM0 T http://1.2.3.4:10000
 P TM1 T http://1.2.3.4:10002
-P LeaseManager0 L http://1.2.3.5:10004
-P LM1 L http://1.2.3.5:10008
+P LeaseManager0 L http://1.2.3.5:6001
+P LM1 L http://1.2.3.5:6002
 #
 # A client (indicated by the 'C' process code) does not have a g-RPC URL,
 # but has a path to the client script it is running.

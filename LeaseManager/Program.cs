@@ -5,6 +5,21 @@ using GrpcPaxos;
 using LeaseManager.Services;
 // using PaxosClient;
 
+static List<(int, string)> FromStringToNodes(string leaseManagerUrls)
+{
+    leaseManagerUrls = leaseManagerUrls.Trim('[');
+    leaseManagerUrls = leaseManagerUrls.Trim(']');
+
+    List<(int, string)> nodes = new List<(int, string)>();
+    string[] leaseManagersUrlsAux = leaseManagerUrls.Split(',');
+    foreach(string serverUlr in leaseManagersUrlsAux )
+    {
+        string[] split = serverUlr.Split(':');
+        nodes.Add((int.Parse(split[2]), serverUlr));
+    }
+    return nodes;
+}
+
 static GrpcChannel[] GetChannels(List<(int, string)> nodes)
 {
     GrpcChannel[] channels = new GrpcChannel[nodes.Count];
@@ -19,12 +34,8 @@ static GrpcChannel[] GetChannels(List<(int, string)> nodes)
 
 var builder = WebApplication.CreateBuilder(args);
 
-List<(int, string)> nodes = new List<(int, string)> // for testing purposes
-        {
-            (6001, "http://localhost:6001"),
-            (6002, "http://localhost:6002")
-        };
 var nodeId = int.Parse(args[0]);
+List<(int, string)> nodes = FromStringToNodes(args[1]);
 
 string ip = Dns.GetHostEntry("localhost").AddressList[0].ToString();
 builder.WebHost.ConfigureKestrel(options =>

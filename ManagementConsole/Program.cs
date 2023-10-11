@@ -1,15 +1,5 @@
 ﻿using System.Diagnostics;
 
-void KillProcesses(HashSet<Process> processes)
-{
-    Console.WriteLine("Killing all processes!");
-    foreach (Process process in processes)
-    {
-        process.Kill();
-    }
-    Console.WriteLine("Processes killed!");
-}
-
 const string systemConfigFilePath = "../configuration_sample";
 // const string systemConfigFilePath = "C:/Users/migas/Repos/dad-project/configuration_sample";
 const string CLIENT_PROCESS_FILE_PATH = "TODO";
@@ -20,6 +10,33 @@ List<string[]> processesConfig = new List<string[]>();
 // for some reason, running in debug mode, the client script file is not found (he assumes a different path, not sure why)
 IEnumerator<string> lines = File.ReadLines(systemConfigFilePath).GetEnumerator(); 
 
+List<String> transactionManagersUrls = new List<string>();
+List<String> leaseManagersUrls = new List<string>();
+
+void KillProcesses(HashSet<Process> processes)
+{
+    Console.WriteLine("Killing all processes!");
+    foreach (Process process in processes)
+    {
+        process.Kill();
+    }
+    Console.WriteLine("Processes killed!");
+}
+
+string BuildLeaseManagerArguments(string nodeId, string href)
+{
+    string nodeIdArg = nodeId.Last().ToString();
+    string leaseManagersArg = "[";
+    foreach (string leaseManagerUrl in leaseManagersUrls)
+    {
+        leaseManagersArg += leaseManagerUrl + ",";
+    }
+    leaseManagersArg = leaseManagersArg.Trim(','); // removes last comma
+    leaseManagersArg += "]";
+
+    return nodeIdArg + " " + leaseManagersArg;
+}
+
 // parse system script
 while (lines.MoveNext())
 {
@@ -27,15 +44,11 @@ while (lines.MoveNext())
     if (line.StartsWith('P'))
     {
         string[] split = line.Split(' ');
-        //List<string> splitAux = split.ToList();
-        //splitAux.RemoveAt(0);
         processesConfig.Add(split);
     }
 }
 
 // parses server urls
-List<String> transactionManagersUrls = new List<string>();
-List<String> leaseManagersUrls = new List<string>();
 foreach (string[] processConfig in processesConfig)
 {
     string processType = processConfig[2];
@@ -76,7 +89,7 @@ try
                 else // lease manager
                 {
                     newProcess.StartInfo.FileName = LEASE_MANAGER_PROCESS_FILE_PATH;
-                    newProcess.StartInfo.Arguments = nodeId.Last().ToString();
+                    newProcess.StartInfo.Arguments = BuildLeaseManagerArguments(nodeId, href);
                 }
                                                  
                 newProcess.Start();
