@@ -2,6 +2,34 @@ using GrpcLeaseService;
 using Microsoft.Net.Http.Headers;
 using TransactionManager.Services;
 using Grpc.Net.Client;
+using System.Net;
+
+static List<(int, string)> FromStringToNodes(string urls)
+{
+    urls = urls.Trim('[');
+    urls = urls.Trim(']');
+
+    List<(int, string)> nodes = new List<(int, string)>();
+    string[] leaseManagersUrlsAux = urls.Split(',');
+    foreach(string serverUlr in leaseManagersUrlsAux )
+    {
+        string[] split = serverUlr.Split(':');
+        nodes.Add((int.Parse(split[2]), serverUlr));
+    }
+    return nodes;
+}
+
+static GrpcChannel[] GetChannels(List<(int, string)> nodes)
+{
+    GrpcChannel[] channels = new GrpcChannel[nodes.Count];
+    int i = 0;
+    foreach (var node in nodes)
+    {
+        channels[i] = GrpcChannel.ForAddress(node.Item2);
+        i++;
+    }
+    return channels;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,10 +39,23 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddGrpc();
 
-DadTkvService dadTkvService = new DadTkvService(new GrpcChannel[] 
-{ 
-    GrpcChannel.ForAddress("http://localhost:6001"),
-    GrpcChannel.ForAddress("http://localhost:6002") 
+int nodeId = int.Parse(args[0]);
+string transactionManagersUrls = args[1];
+
+/*
+List<(int, string)> transactionManagerServers = new List<(int, string)> {
+    (5001, "http://localhost:5001"),
+    (5002, "http://localhost:5002"),
+};
+*/
+List<(int, string)> transactionManagerServers = FromStringToNodes(transactionManagersUrls);
+
+DadTkvService dadTkvService = new DadTkvService(GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2);
+
+string ip = Dns.GetHostEntry("localhost").AddressList[0].ToString();
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Listen(IPAddress.Parse(ip), transactionManagerServers[nodeId].Item1);
 });
 
 LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService);

@@ -35,19 +35,33 @@ static GrpcChannel[] GetChannels(List<(int, string)> nodes)
 var builder = WebApplication.CreateBuilder(args);
 
 var nodeId = int.Parse(args[0]);
-List<(int, string)> nodes = FromStringToNodes(args[1]);
+
+/*
+List<(int, string)> leaseManagerServers = new List<(int, string)> {
+    (6001, "http://localhost:6001"),
+    (6002, "http://localhost:6002"),
+};
+
+List<(int, string)> transactionManagerServers = new List<(int, string)> {
+    (5001, "http://localhost:5001"),
+    (5002, "http://localhost:5002"),
+};
+*/
+
+List<(int, string)> leaseManagerServers = FromStringToNodes(args[1]);
+List<(int, string)> transactionManagerServers = FromStringToNodes(args[2]);
 
 string ip = Dns.GetHostEntry("localhost").AddressList[0].ToString();
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Listen(IPAddress.Parse(ip), nodes[nodeId].Item1);
+    options.Listen(IPAddress.Parse(ip), leaseManagerServers[nodeId].Item1);
 });
 
 List<LeaseRequest> requests = new List<LeaseRequest>();
 AcceptedValue acceptedValue = new AcceptedValue();
 
-LeaseManagerService leaseManagerService = new LeaseManagerService(nodeId);
-PaxosService paxosService = new PaxosService(nodeId, GetChannels(nodes), leaseManagerService);
+LeaseManagerService leaseManagerService = new LeaseManagerService(nodeId, GetChannels(transactionManagerServers));
+PaxosService paxosService = new PaxosService(nodeId, GetChannels(leaseManagerServers), leaseManagerService);
 
 // Add services to the container.
 builder.Services.AddGrpc();

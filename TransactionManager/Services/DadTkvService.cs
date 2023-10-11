@@ -7,18 +7,19 @@ using GrpcLeaseService;
 
 public class DadTkvService : DADTKV.DADTKVBase
 {
-    public string nodeUrl = "CHANGE_ME"; // url of this node
+    public string nodeUrl;
     HashSet<string> tmNodes = new HashSet<string>(); // set of all TM nodes (excluding this one)
     HashSet<DadInt> storage = new HashSet<DadInt>(); // set of all dadInts stored in this node
     public HashSet<Lease> leases = new HashSet<Lease>(); // set of all leases stored in this node
     GrpcChannel[] nodes; // array of all nodes
     object lockObject = new object();
 
-    public DadTkvService(GrpcChannel[] nodes)
+    public DadTkvService(GrpcChannel[] nodes, string nodeUrl)
     {
         this.nodes = nodes;
+        this.nodeUrl = nodeUrl;
     }
-
+    
     bool CheckForNecessaryLeasesForReadOperations(IEnumerable<string> reads)
     {
         foreach (string read in reads)

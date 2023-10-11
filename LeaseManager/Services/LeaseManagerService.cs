@@ -8,14 +8,12 @@ using System.Threading.Tasks;
 public class LeaseManagerService : LeaseService.LeaseServiceBase
 {
     List<Lease> requests = new();
-    GrpcChannel[] nodes = new GrpcChannel[]{
-        GrpcChannel.ForAddress("http://localhost:5000"),
-            // GrpcChannel.ForAddress("http://localhost:5002"),
-    };
+    GrpcChannel[] nodes;
     int nodeId;
 
-    public LeaseManagerService(int nodeId)
+    public LeaseManagerService(int nodeId, GrpcChannel[] nodes)
     {
+        this.nodes = nodes;
         this.nodeId = nodeId;
     }
 

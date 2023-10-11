@@ -23,7 +23,20 @@ void KillProcesses(HashSet<Process> processes)
     Console.WriteLine("Processes killed!");
 }
 
-string BuildLeaseManagerArguments(string nodeId, string href)
+string GetTransactionManagerUrlsArgument()
+{
+    string transactionManagersArg = "[";
+    foreach (string transactionManagerUrl in transactionManagersUrls)
+    {
+        transactionManagersArg += transactionManagerUrl + ",";
+    }
+    transactionManagersArg = transactionManagersArg.Trim(','); // removes last comma
+    transactionManagersArg += "]";
+
+    return transactionManagersArg;
+}
+
+string BuildLeaseManagerArguments(string nodeId)
 {
     string nodeIdArg = nodeId.Last().ToString();
     string leaseManagersArg = "[";
@@ -34,7 +47,13 @@ string BuildLeaseManagerArguments(string nodeId, string href)
     leaseManagersArg = leaseManagersArg.Trim(','); // removes last comma
     leaseManagersArg += "]";
 
-    return nodeIdArg + " " + leaseManagersArg;
+    return nodeIdArg + " " + leaseManagersArg + " " + GetTransactionManagerUrlsArgument();
+}
+
+string BuildTransactionManagerArguments(string nodeId)
+{
+    string nodeIdArg = nodeId.Last().ToString();
+    return nodeIdArg + " " + GetTransactionManagerUrlsArgument();
 }
 
 // parse system script
@@ -84,12 +103,12 @@ try
                 if (processType == "T") // transaction manager
                 {
                     newProcess.StartInfo.FileName = TRANSACTION_MANAGER_PROCESS_FILE_PATH;
-                    newProcess.StartInfo.Arguments = nodeId.Last().ToString();
+                    newProcess.StartInfo.Arguments = BuildTransactionManagerArguments(nodeId);
                 }
                 else // lease manager
                 {
                     newProcess.StartInfo.FileName = LEASE_MANAGER_PROCESS_FILE_PATH;
-                    newProcess.StartInfo.Arguments = BuildLeaseManagerArguments(nodeId, href);
+                    newProcess.StartInfo.Arguments = BuildLeaseManagerArguments(nodeId);
                 }
                                                  
                 newProcess.Start();
