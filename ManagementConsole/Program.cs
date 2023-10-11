@@ -1,60 +1,100 @@
-﻿/*using System.Diagnostics;
+﻿using System.Diagnostics;
+
+void KillProcesses(HashSet<Process> processes)
+{
+    Console.WriteLine("Killing all processes!");
+    foreach (Process process in processes)
+    {
+        process.Kill();
+    }
+    Console.WriteLine("Processes killed!");
+}
 
 const string systemConfigFilePath = "../configuration_sample";
 // const string systemConfigFilePath = "C:/Users/migas/Repos/dad-project/configuration_sample";
 const string CLIENT_PROCESS_FILE_PATH = "TODO";
-const string TRANSACTION_MANAGER_PROCESS_FILE_PATH = "TODO";
-const string LEASE_MANAGER_PROCESS_FILE_PATH = "TODO";
+const string TRANSACTION_MANAGER_PROCESS_FILE_PATH = "../TransactionManager/bin/Debug/net6.0/TransactionManager";
+const string LEASE_MANAGER_PROCESS_FILE_PATH = "../LeaseManager/bin/Debug/net6.0/LeaseManager";
 
-// infinite loop, executing the commands in the client script file
-while (true) 
+List<string[]> processesConfig = new List<string[]>();
+// for some reason, running in debug mode, the client script file is not found (he assumes a different path, not sure why)
+IEnumerator<string> lines = File.ReadLines(systemConfigFilePath).GetEnumerator(); 
+
+// parse system script
+while (lines.MoveNext())
 {
-    // for some reason, running in debug mode, the client script file is not found (he assumes a different path, not sure why)
-    IEnumerator<string> lines = File.ReadLines(systemConfigFilePath).GetEnumerator(); 
-    
-    // executes a script operation (line)
-    while (lines.MoveNext())
+    string line = lines.Current;
+    if (line.StartsWith('P'))
     {
-        string line = lines.Current;
         string[] split = line.Split(' ');
-        if (line.StartsWith('P'))
+        //List<string> splitAux = split.ToList();
+        //splitAux.RemoveAt(0);
+        processesConfig.Add(split);
+    }
+}
+
+// parses server urls
+List<String> transactionManagersUrls = new List<string>();
+List<String> leaseManagersUrls = new List<string>();
+foreach (string[] processConfig in processesConfig)
+{
+    string processType = processConfig[2];
+    if (processType.StartsWith("T"))
+    {
+        transactionManagersUrls.Add(processConfig[3]);
+    }
+    else if (processType.StartsWith("L"))
+    {
+        leaseManagersUrls.Add(processConfig[3]);
+    }
+}
+
+// launches processes
+HashSet<Process> processes = new HashSet<Process>();
+try
+{
+    foreach (string[] processConfig in processesConfig)
+    {
+        char type = processConfig[0][0];
+        if (type == 'P') // process
         {
-            string nodeName = split[1];
-            string processType = split[2];
-            if (processType == "T" || processType == "L" || processType == "C")
+            string processType = processConfig[2];
+            string nodeId = processConfig[1];
+
+            if (processType == "T" || processType == "L")
             {
-                int href = int.Parse(split[3]);
+                string href = processConfig[3];
                 
                 Process newProcess = new Process();
+                processes.Add(newProcess);
+
                 if (processType == "T") // transaction manager
                 {
                     newProcess.StartInfo.FileName = TRANSACTION_MANAGER_PROCESS_FILE_PATH;
+                    newProcess.StartInfo.Arguments = nodeId.Last().ToString();
                 }
-                else if (processType == "L") // lease manager
+                else // lease manager
                 {
                     newProcess.StartInfo.FileName = LEASE_MANAGER_PROCESS_FILE_PATH;
+                    newProcess.StartInfo.Arguments = nodeId.Last().ToString();
                 }
-                else if (processType == "C") // client
-                {
-                    newProcess.StartInfo.FileName = CLIENT_PROCESS_FILE_PATH;
-                }
-                
-                newProcess.StartInfo.Arguments = nodeName;
+                                                 
                 newProcess.Start();
                 Console.WriteLine("Process started.");
             }
         }
-        else if (line.StartsWith('S'))
-        {
-            string timeSlots = split[1];
-        }
-        else if (line.StartsWith('T'))
-        {
-            string physicalWallTime = split[1];
-        }
     }
-}*/
+}
+catch
+{
+    KillProcesses(processes);
+    return;
+}
 
+Console.ReadLine();
+KillProcesses(processes);
+
+/*
 int count = 0;
 List<Task> tasks = new();
 for (int i = 0; i < 30; i++){
@@ -70,5 +110,4 @@ for (int i = 0; i < 30; i++){
 Task.WaitAll(tasks.ToArray());
 
 Console.WriteLine($"Count Outside task {count}");
-
-
+*/

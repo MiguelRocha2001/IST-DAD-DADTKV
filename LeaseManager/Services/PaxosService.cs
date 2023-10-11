@@ -50,10 +50,6 @@ public class PaxosService : Paxos.PaxosBase
         Console.WriteLine(QUORUM_SIZE);
         this.nodeId = nodeId;
         this.nodes = nodes;
-        // this.nodes = new GrpcChannel[]{
-        //     GrpcChannel.ForAddress("http://localhost:6001"),
-        //     GrpcChannel.ForAddress("http://localhost:6002"),
-        // };
         this.leaseManagerService = leaseManagerService;
         this.currentEpochId = nodeId;
     }
