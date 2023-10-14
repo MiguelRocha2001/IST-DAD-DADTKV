@@ -280,7 +280,7 @@ public class PaxosService : Paxos.PaxosBase
                                     if (acceptedValue is null)
                                     {
                                         acceptedValue = new();
-                                        var leases = GenerateNewLeases();
+                                        var leases = leaseManagerService.GetLeaseRequests();
                                         InsertOrIncrementAcceptedValue(leases);
                                         acceptedValue.Leases.Add(leases);
                                     }
@@ -410,29 +410,6 @@ public class PaxosService : Paxos.PaxosBase
         await Task.Delay(tries * 2 * 1000);
     }
 
-    /**
-        Generates a new value for the current epoch.
-        The value is generated based on the requests received.
-        The previous Leases are retained. New Leases are generated based on the requests.
-        This also cleans the requests list.
-*/
-    private List<Lease> GenerateNewLeases()
-    {
-        // AcceptedValue newAcceptedValue = new();
-        List<Lease> leases = new List<Lease>();
-        List<Lease> leaseRequests = leaseManagerService.GetLeaseRequests();
-        HashSet<string> assignedLeaseIds = new();
-        foreach (var leaseRequest in leaseRequests)
-        {
-            if (leaseRequest.RequestIds.ToList().TrueForAll(id => !assignedLeaseIds.Contains(id)))
-            {
-                assignedLeaseIds.UnionWith(leaseRequest.RequestIds);
-                leases.Add(leaseRequest);
-            }
-        }
-        return leases;
-    }
-
     private int InsertOrIncrementAcceptedValue(List<Lease> leases) =>
         acceptedValues.AddOrUpdate(leases, 1, (k, v) => v + 1);
 
@@ -494,44 +471,5 @@ public class PaxosService : Paxos.PaxosBase
                 }
             }
         }
-    }
-
-    // ------------------------------------------------ NOT USED ------------------------------------------------
-    private GrpcChannel GetNodeChannel(int id)
-    {
-        return nodes[id % nodes.Count()];
-    }
-
-    /**
-        Overrides the paxos chosen value 
-*/
-    // private void DefineNewValue(List<GrpcPaxos.Lease> leases, int writeTimestamp, int readTimestamp)
-    // {
-    //     List<LeaseRequest> leaseRequests = new List<LeaseRequest>();
-    //     foreach (GrpcPaxos.Lease lease in leases)
-    //     {
-    //         leaseRequests.Add(new LeaseRequest(lease.TransactionManager, lease.Permissions.ToHashSet()));
-    //     }
-    //     LeaseAtributionOrder chosenOrder = new LeaseAtributionOrder();
-    //
-    //     foreach (LeaseRequest leaseRequest in leaseRequests)
-    //     {
-    //         if (chosenOrder.Contains(leaseRequest))
-    //         {
-    //             int maxEpoch = chosenOrder.GetGreatestAssignedLeaseEpoch(leaseRequest); // should be =/= -1
-    //             chosenOrder.AddLease(maxEpoch, leaseRequest);
-    //         }
-    //         else
-    //         {
-    //             chosenOrder.AddLease(currentEpoch, leaseRequest);
-    //         }
-    //     }
-    //     //leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, writeTimestamp, readTimestamp);
-    // }
-
-    // FIXME: adapt to new lease manager
-    private string GenerateLeases2()
-    {
-        return $"Node: {nodeId}";
     }
 }
