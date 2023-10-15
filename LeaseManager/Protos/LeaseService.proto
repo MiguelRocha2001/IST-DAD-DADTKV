@@ -6,14 +6,21 @@ package lease;
 
 service LeaseService {
   rpc RequestLease (Lease) returns (Empty);
-  rpc SendLeases (LeasesResponse) returns (Empty);
+  rpc SendLeasesOrder (LeasesResponse) returns (Empty);
 }
 
 message Empty {}
 
+/*
 message LeasesResponse {
      int32 epochId = 1;
      repeated Lease leases = 2;
+}
+*/
+
+message LeasesResponse {
+  int32 epochId = 1;
+  repeated LeaseOrder leaseOrder = 2;
 }
 
 message Lease {
@@ -24,3 +31,8 @@ message Lease {
 // message RequestLeaseReply {
 //   repeated Lease leases = 1;
 // }
+
+message LeaseOrder {
+  Lease lease = 1;
+  int32 order = 2;
+}

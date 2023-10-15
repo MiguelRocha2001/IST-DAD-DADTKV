@@ -29,11 +29,6 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
         return Task.FromResult(new Empty());
     }
 
-    public override Task<Empty> SendLeases(LeasesResponse request, ServerCallContext context)
-    {
-        throw new NotImplementedException();
-    }
-
     public List<Lease> GetLeaseRequests()
     {
         lock (this)
@@ -44,7 +39,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
         }
     }
 
-    /*
+    
     public void Send(LeasesResponse response)
     {
         for (int id = 0; id < nodes.Count(); id++)
@@ -58,7 +53,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
                     try
                     {
                         var client = new LeaseService.LeaseServiceClient(nodes[idAux]);
-                        client.SendLeases(response);
+                        client.SendLeasesOrder(response);
                         break;
                     }
                     catch (Exception e)
@@ -70,7 +65,6 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
             });
         }
     }
-    */
 
     /**
         Prints exception message, awaits for backoffTimeout and returns the new backoffTimeout.

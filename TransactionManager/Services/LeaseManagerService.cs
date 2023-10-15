@@ -12,8 +12,9 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
         this.dadTkvService = dadTkvService;
     }
 
-    public override Task<Empty> SendLeases(LeasesResponse request, ServerCallContext context)
+    public override Task<Empty> SendLeasesOrder(LeasesResponse request, ServerCallContext context)
     {
+        /*
         HashSet<Lease> ExtractTransactionManagerLeases()
         {
             HashSet<Lease> transactionManagerLeases = new HashSet<Lease>();
@@ -24,6 +25,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
             }
             return transactionManagerLeases;
         }
+        */
 
         /**
             Removes all leases that are conflicted with the new ones
@@ -53,11 +55,12 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
 
         Console.WriteLine("Received new assigment of leases");
 
-        Console.WriteLine("Leases: " + request.Leases);
+        Console.WriteLine("LeasesOrder: " + request.LeaseOrder);
 
-        RemoveConflictedLeases(request.Leases);
+        // RemoveConflictedLeases(request.LeaseOrder);
         
-        HashSet<Lease> leases = ExtractTransactionManagerLeases();
+        // HashSet<Lease> leases = ExtractTransactionManagerLeases();
+        /*
         foreach (Lease lease in leases) // update leases
         {
             if (lease.TransactionManagerId == dadTkvService.nodeUrl)
@@ -65,6 +68,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
         }
 
         dadTkvService.WakeUpWaitingTransactionRequests();
+        */
         return Task.FromResult(new Empty());
     }
 

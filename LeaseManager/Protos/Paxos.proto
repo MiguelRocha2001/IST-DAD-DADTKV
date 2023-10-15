@@ -46,10 +46,5 @@ message AcceptedValue {
 
 message AcceptedValue {
   int32 id = 1;
-  repeated LeaseOrder leaseOrder = 2;
-}
-
-message LeaseOrder {
-  lease.Lease lease = 1;
-  int32 order = 2;
+  repeated lease.LeaseOrder leaseOrder = 2;
 }
