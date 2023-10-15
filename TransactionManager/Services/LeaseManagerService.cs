@@ -71,7 +71,15 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
                     // we have priority
                     if (lease.Equals(lease1))
                     {
-                        dadTkvService.leases.Add(lease);
+                        bool releaseThisLeaseAfterTransaction = false;
+
+                        // check if there other conflicting leases after this one
+                        if (leases.Where(l => !l.Equals(lease)).Any(l => ConflictsWith(lease, l)))
+                        {
+                            releaseThisLeaseAfterTransaction = true;
+                        }
+
+                        dadTkvService.leases.Add(new Tuple<bool, Lease>(releaseThisLeaseAfterTransaction, lease));
                         dadTkvService.WakeUpWaitingTransactionRequests(); // wakes waiting transactions
                         break;
                     }

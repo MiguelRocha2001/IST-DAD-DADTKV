@@ -14,7 +14,7 @@ public class TransactionManagerService : TransactionService.TransactionServiceBa
 
     public override Task<Empty> ReleaseLease(ReleaseLeaseMessage releaseLeaseMessage, ServerCallContext context)
     {
-        Console.WriteLine($"ReleaseLease: {releaseLeaseMessage.Lease}");
+        Console.WriteLine($"Lease released: {releaseLeaseMessage.Lease}");
 
         return Task.FromResult(new Empty());
     }

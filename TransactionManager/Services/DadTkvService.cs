@@ -4,6 +4,7 @@ using Grpc.Core;
 using GrpcDADTKV;
 using Grpc.Net.Client;
 using GrpcLeaseService;
+using GrpcTransactionService;
 
 public class DadTkvService : DADTKV.DADTKVBase
 {
@@ -11,7 +12,7 @@ public class DadTkvService : DADTKV.DADTKVBase
     public int nodeId;
     HashSet<string> tmNodes = new HashSet<string>(); // set of all TM nodes (excluding this one)
     HashSet<DadInt> storage = new HashSet<DadInt>(); // set of all dadInts stored in this node
-    public HashSet<Lease> leases = new HashSet<Lease>(); // set of all leases stored in this node
+    public HashSet<Tuple<bool, Lease>> leases = new HashSet<Tuple<bool, Lease>>(); // set of all leases
     GrpcChannel[] nodes; // array of all nodes
     object lockObject = new object();
 
@@ -27,9 +28,9 @@ public class DadTkvService : DADTKV.DADTKVBase
         foreach (string read in reads)
         {
             bool found = false;
-            foreach (Lease lease in leases)
+            foreach (Tuple<bool, Lease> tuple in leases)
             {
-                if (!lease.RequestIds.Contains(read)) 
+                if (!tuple.Item2.RequestIds.Contains(read)) 
                     continue; // try next available lease
                 else
                 {
@@ -47,9 +48,9 @@ public class DadTkvService : DADTKV.DADTKVBase
         foreach (DadInt write in writes)
         {
             bool found = false;
-            foreach (Lease lease in leases)
+            foreach (Tuple<bool, Lease> tuple in leases)
             {
-                if (!lease.RequestIds.Contains(write.Key)) 
+                if (!tuple.Item2.RequestIds.Contains(write.Key)) 
                     continue; // try next available lease
                 else
                 {
@@ -68,15 +69,12 @@ public class DadTkvService : DADTKV.DADTKVBase
             CheckForNecessaryLeasesForWriteOperations(writes);
     }
 
-    void RequestLease(HashSet<string> requestPermissions)
+    void RequestLease(Lease lease)
     {
         foreach (GrpcChannel channel in nodes)
         {
             var client = new LeaseService.LeaseServiceClient(channel);
-            Lease request = new Lease();
-            request.TransactionManagerId = nodeUrl;
-            request.RequestIds.Add(requestPermissions);
-            Task.FromResult(client.RequestLease(request)); // this should not blcock. Change not to block
+            Task.FromResult(client.RequestLease(lease)); // this should not blcock. Change not to block
         }
     }
 
@@ -155,8 +153,48 @@ public class DadTkvService : DADTKV.DADTKVBase
     
     public override Task<TxSubmitReply> TxSubmit(TxSubmitRequest request, ServerCallContext context)
     {
+        void ReleaseLeaseIfNecessary(Lease lease)
+        {
+            foreach (Tuple<bool, Lease> leaseTuple in leases)
+            {
+                if (leaseTuple.Item2.Equals(lease))
+                {
+                    if (leaseTuple.Item1) // release lease after transaction
+                    {
+                        foreach (GrpcChannel channel in nodes)
+                        {
+                            if (channel.Target == nodeUrl)
+                                break;
+                            var client = new TransactionService.TransactionServiceClient(channel);
+                            ReleaseLeaseMessage releaseLeaseMessage = new ReleaseLeaseMessage();
+                            releaseLeaseMessage.Lease = lease;
+                            client.ReleaseLease(releaseLeaseMessage);
+                        }
+                        Console.WriteLine("Lease with permissions " + lease.RequestIds + " released");
+                        return;
+                    }
+                    else // keep lease
+                    {
+                        Console.WriteLine("Lease with permissions " + lease.RequestIds + " kept");
+                        return;
+                    }
+                }
+            }
+        }
+
+        Lease BuildLease(HashSet<string> requestIds)
+        {
+            Lease lease = new Lease();
+            lease.TransactionManagerId = nodeId.ToString();
+            lease.RequestIds.Add(requestIds);
+            return lease;
+        }
+
         Console.WriteLine($"Client: {request.Client}");
 
+        HashSet<string> permissions = request.Writes.Select(x => x.Key).ToHashSet()
+            .Union(request.Reads.AsEnumerable()).ToHashSet();
+        Lease lease = BuildLease(permissions);
         do
         {
             Console.WriteLine("Checking for necessary leases");
@@ -164,9 +202,8 @@ public class DadTkvService : DADTKV.DADTKVBase
             if (!hasLeases)
             {
                 Console.WriteLine("Leases not available");
-                HashSet<string> permissions = request.Writes.Select(x => x.Key).ToHashSet()
-                    .Union(request.Reads.AsEnumerable()).ToHashSet();
-                RequestLease(permissions);
+
+                RequestLease(lease);
                 lock (lockObject) 
                 {
                     Monitor.Wait(lockObject); // waits for some other thread wake it up when new leases are available
@@ -178,6 +215,9 @@ public class DadTkvService : DADTKV.DADTKVBase
         Console.WriteLine("Leases available");
         
         HashSet<DadInt> result = DoTransaction(request.Client, request.Reads, request.Writes); // execute transaction
+
+        ReleaseLeaseIfNecessary(lease);
+
         TxSubmitReply reply = new TxSubmitReply();
         reply.Result.Add(result);
 
