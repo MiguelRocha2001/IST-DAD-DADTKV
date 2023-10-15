@@ -71,6 +71,7 @@ builder.Services.AddGrpc();
 int nodeId = int.Parse(args[0]);
 
 List<(int, string)> transactionManagerServers;
+int quorumSize; // same as the number of lease managers
 
 // TODO: this will be used to update the fault tolerance state of the process...
 int timeSlots;
@@ -80,9 +81,10 @@ int lasts;
 if (args.Length > 1)
 {
     transactionManagerServers = FromStringToNodes(args[1]);
-    timeSlots = int.Parse(args[2]);
-    starts = args[3];
-    lasts = int.Parse(args[4]);
+    quorumSize = int.Parse(args[2]);
+    timeSlots = int.Parse(args[3]);
+    starts = args[4];
+    lasts = int.Parse(args[5]);
 }
 else
 {
@@ -90,6 +92,7 @@ else
         (5001, "http://localhost:5001"),
         (5002, "http://localhost:5002"),
     };  
+    quorumSize = 2;
     timeSlots = 10;
     starts = "null";
     lasts = 10;
@@ -111,7 +114,7 @@ if (starts != "null") // used for testing only
 }
 
 DadTkvService dadTkvService = new DadTkvService(GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2);
-LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService);
+LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService, quorumSize);
 TransactionManagerService transactionManagerService = new TransactionManagerService(dadTkvService);
 
 string ip = Dns.GetHostEntry("localhost").AddressList[0].ToString();

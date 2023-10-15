@@ -18,13 +18,14 @@ class ListLeaseOrderComparator : EqualityComparer<List<LeaseOrder>>
 public class LeaseManagerService : LeaseService.LeaseServiceBase
 {
     DadTkvService dadTkvService;
-    private int QUORUM_SIZE = 2; // TODO: change later
+    private int quorumSize;
     ConcurrentDictionary<List<LeaseOrder>, int> acceptedValues = new(new ListLeaseOrderComparator());
     List<LeaseOrder> requestedLeasesOrder; // holds the requested leases and the respective order
 
-    public LeaseManagerService(DadTkvService dadTkvService)
+    public LeaseManagerService(DadTkvService dadTkvService, int quorumSize)
     {
         this.dadTkvService = dadTkvService;
+        this.quorumSize = quorumSize;
     }
 
     public override Task<Empty> SendLeasesOrder(LeasesResponse request, ServerCallContext context)
@@ -33,7 +34,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
         Console.WriteLine("LeasesOrder: " + request.LeaseOrder);
 
         int count = acceptedValues.AddOrUpdate(request.LeaseOrder.ToList(), 1, (k, v) => v + 1);
-        if (count == QUORUM_SIZE)
+        if (count == quorumSize)
         {
             Console.WriteLine("Quorum reached");
             requestedLeasesOrder = request.LeaseOrder.ToList();

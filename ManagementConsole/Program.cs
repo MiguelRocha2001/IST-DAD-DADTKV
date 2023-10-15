@@ -58,7 +58,8 @@ string BuildLeaseManagerArguments(string nodeId)
 string BuildTransactionManagerArguments(string nodeId)
 {
     string nodeIdArg = nodeId.Last().ToString();
-    return nodeIdArg + " " + GetTransactionManagerUrlsArgument() + " " + timeSlots + " " + starts + " " + lasts;
+    int quorumSize = leaseManagersUrls.Count;
+    return nodeIdArg + " " + GetTransactionManagerUrlsArgument() + " " + quorumSize + " " + timeSlots + " " + starts + " " + lasts;
 }
 
 // parse system script
