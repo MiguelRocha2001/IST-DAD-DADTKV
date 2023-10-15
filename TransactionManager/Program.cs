@@ -31,6 +31,35 @@ static GrpcChannel[] GetChannels(List<(int, string)> nodes)
     return channels;
 }
 
+static DateTime? FromStringToDateTime(string starts)
+{
+    DateTime now = DateTime.Now;
+    string[] split = starts.Split(':');
+    if (split.Length != 3)
+    {
+        return null;
+    }
+    int hour = int.Parse(split[0]);
+    int minute = int.Parse(split[1]);
+    int second = int.Parse(split[2]);
+    return new DateTime(now.Year, now.Month, now.Day, hour, minute, second);
+}
+
+/**
+    Returns the seconds between two dates.
+    [startTime] shhouls be greater than [now].
+    @param startTime The start date.
+    @param now The end date.
+*/
+static int GetSecondsApart(DateTime startTime, DateTime now)
+{
+    TimeSpan timeSpan = startTime - now;
+    int totalSeconds = (int)timeSpan.TotalSeconds;
+    if (totalSeconds < 0)
+        throw new Exception("startTime is in the past!");
+    return totalSeconds;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Additional configuration is required to successfully run gRPC on macOS.
@@ -40,15 +69,46 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddGrpc();
 
 int nodeId = int.Parse(args[0]);
-string transactionManagersUrls = args[1];
+
+List<(int, string)> transactionManagerServers;
+
+// TODO: this will be used to update the fault tolerance state of the process...
+int timeSlots;
+string starts;
+int lasts;
+
+if (args.Length > 1)
+{
+    transactionManagerServers = FromStringToNodes(args[1]);
+    timeSlots = int.Parse(args[2]);
+    starts = args[3];
+    lasts = int.Parse(args[4]);
+}
+else
+{
+    transactionManagerServers = new List<(int, string)> {
+        (5001, "http://localhost:5001"),
+        (5002, "http://localhost:5002"),
+    };  
+    timeSlots = 10;
+    starts = "null";
+    lasts = 10;
+}
 
 /*
-List<(int, string)> transactionManagerServers = new List<(int, string)> {
-    (5001, "http://localhost:5001"),
-    (5002, "http://localhost:5002"),
-};
+Console.WriteLine("TimeSlots: " + timeSlots);
+Console.WriteLine("Starts: " + starts);
+Console.WriteLine("Lasts: " + lasts);
 */
-List<(int, string)> transactionManagerServers = FromStringToNodes(transactionManagersUrls);
+
+if (starts != "null") // used for testing only
+{
+    DateTime? startTime = FromStringToDateTime(starts);
+    int timeSpan = GetSecondsApart(startTime.Value, DateTime.Now);
+    Console.WriteLine("TM Waiting " + timeSpan + " seconds to start!");
+    await Task.Delay(timeSpan * 1000);
+    Console.WriteLine("TM Starting!");
+}
 
 DadTkvService dadTkvService = new DadTkvService(GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2);
 

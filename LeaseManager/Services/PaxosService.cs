@@ -36,8 +36,8 @@ public class PaxosService : Paxos.PaxosBase
     LeaseManagerService leaseManagerService;
     const string clientScriptFilename = "../configuration_sample";
     readonly int QUORUM_SIZE;
-    int timeSlot;
-    int nOfSlots;
+    int timeSlots; // TODO: use this
+    int slotTime;
     int nodeId;
     GrpcChannel[] nodes;
     int currentEpoch = 1;
@@ -55,7 +55,7 @@ public class PaxosService : Paxos.PaxosBase
     //ConcurrentDictionary<HashSet<Tuple<string, List<string>>> , int> acceptedValues = new();
     AcceptedValue? highestAcceptedValue = null;
 
-    public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService)
+    public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService, int timeSlots, int slotTime)
     {
         Console.WriteLine(nodeId);
 
@@ -65,6 +65,8 @@ public class PaxosService : Paxos.PaxosBase
         this.nodes = nodes;
         this.leaseManagerService = leaseManagerService;
         this.currentEpochId = nodeId;
+        this.timeSlots = timeSlots;
+        this.slotTime = slotTime;
     }
 
     public async void Init()
@@ -73,7 +75,8 @@ public class PaxosService : Paxos.PaxosBase
         DateTime? startEpochTime = null;
         CancellationTokenSource tokenSource = new();
         CancellationToken ct = tokenSource.Token;
-        TimeSpan epochTimeInterval = TimeSpan.FromSeconds(10);
+        //TimeSpan epochTimeInterval = TimeSpan.FromSeconds(10);
+        TimeSpan epochTimeInterval = TimeSpan.FromSeconds(slotTime);
 
         void ResetProperties()
         {
@@ -293,8 +296,7 @@ public class PaxosService : Paxos.PaxosBase
                                     if (acceptedValue is null)
                                     {
                                         acceptedValue = new();
-                                        //var leases = GenerateNewLeases();
-                                        List<LeaseOrder> decidedOrder = AtributeLeaseRequestOrder();
+                                        var leases = leaseManagerService.GetLeaseRequests();
                                         InsertOrIncrementAcceptedValue(leases);
                                         acceptedValue.LeaseOrder.AddRange(decidedOrder);
                                     }
@@ -424,73 +426,6 @@ public class PaxosService : Paxos.PaxosBase
         await Task.Delay(tries * 2 * 1000);
     }
 
-    /**
-        Generates a new value for the current epoch.
-        The value is generated based on the requests received.
-        The previous Leases are retained. New Leases are generated based on the requests.
-        This also cleans the requests list.
-    */
-    /*
-    private List<Lease> GenerateNewLeases()
-    {
-        // AcceptedValue newAcceptedValue = new();
-        List<Lease> leases = new List<Lease>();
-        List<Lease> leaseRequests = leaseManagerService.GetLeaseRequests();
-        HashSet<string> assignedLeaseIds = new();
-        foreach (var leaseRequest in leaseRequests)
-        {
-            if (leaseRequest.RequestIds.ToList().TrueForAll(id => !assignedLeaseIds.Contains(id)))
-            {
-                assignedLeaseIds.UnionWith(leaseRequest.RequestIds);
-                leases.Add(leaseRequest);
-            }
-        }
-        return leases;
-    }
-    */
-
-    private List<LeaseOrder> AtributeLeaseRequestOrder()
-    {
-        /**
-            Checks if current order has a lease that conflicts with the new lease.
-            If not, adds the new lease to the order, as the first element.
-            If yes, adds the new lease to the order, after the conflicting lease.
-        */
-        HashSet<Tuple<int, Lease>> OrderNewLeaseRequest(Lease lease, HashSet<Tuple<int, Lease>> order)
-        {
-            int orderNumber = 0;
-            foreach (string requestId in lease.RequestIds)
-            {
-                foreach (Tuple<int, Lease> tuple in order)
-                {    
-                    if (tuple.Item2.RequestIds.Contains(requestId))
-                    {
-                        if (tuple.Item1 >= orderNumber)
-                            orderNumber = tuple.Item1 + 1;
-                    }
-                }
-            }
-            order.Add(Tuple.Create(orderNumber, lease));
-            return order;
-        }
-
-        HashSet<Tuple<int, Lease>> order = new HashSet<Tuple<int, Lease>>();
-        List<Lease> leaseRequests = leaseManagerService.GetLeaseRequests();
-        foreach (Lease lease in leaseRequests)
-        {
-            order = OrderNewLeaseRequest(lease, order);
-        }
-        List<LeaseOrder> leasesOrder = new List<LeaseOrder>();
-        foreach (Tuple<int, Lease> tuple in order)
-        {
-            LeaseOrder leaseOrder = new LeaseOrder();
-            leaseOrder.Lease = tuple.Item2;
-            leaseOrder.Order = tuple.Item1;
-            leasesOrder.Add(leaseOrder);
-        }
-        return leasesOrder;
-    }
-
     private int InsertOrIncrementAcceptedValue(List<Lease> leases) =>
         acceptedValues.AddOrUpdate(leases, 1, (k, v) => v + 1);
 
@@ -506,6 +441,7 @@ public class PaxosService : Paxos.PaxosBase
     }
 
 
+    /*
     private void ProcessConfigurationFile()
     {
         IEnumerator<string> lines = File.ReadLines(clientScriptFilename).GetEnumerator();
@@ -527,7 +463,7 @@ public class PaxosService : Paxos.PaxosBase
                         // TODO: create a new lease manager
                     }
                 }
-                */
+                /*
                 if (line.StartsWith('D'))
                 {
                     timeSlot = int.Parse(firstToken);
@@ -539,6 +475,7 @@ public class PaxosService : Paxos.PaxosBase
             }
         }
     }
+    */
 
     private void CalculateNewCurrentEpochId(int minimumId)
     {
@@ -552,44 +489,5 @@ public class PaxosService : Paxos.PaxosBase
                 }
             }
         }
-    }
-
-    // ------------------------------------------------ NOT USED ------------------------------------------------
-    private GrpcChannel GetNodeChannel(int id)
-    {
-        return nodes[id % nodes.Count()];
-    }
-
-    /**
-        Overrides the paxos chosen value 
-*/
-    // private void DefineNewValue(List<GrpcPaxos.Lease> leases, int writeTimestamp, int readTimestamp)
-    // {
-    //     List<LeaseRequest> leaseRequests = new List<LeaseRequest>();
-    //     foreach (GrpcPaxos.Lease lease in leases)
-    //     {
-    //         leaseRequests.Add(new LeaseRequest(lease.TransactionManager, lease.Permissions.ToHashSet()));
-    //     }
-    //     LeaseAtributionOrder chosenOrder = new LeaseAtributionOrder();
-    //
-    //     foreach (LeaseRequest leaseRequest in leaseRequests)
-    //     {
-    //         if (chosenOrder.Contains(leaseRequest))
-    //         {
-    //             int maxEpoch = chosenOrder.GetGreatestAssignedLeaseEpoch(leaseRequest); // should be =/= -1
-    //             chosenOrder.AddLease(maxEpoch, leaseRequest);
-    //         }
-    //         else
-    //         {
-    //             chosenOrder.AddLease(currentEpoch, leaseRequest);
-    //         }
-    //     }
-    //     //leaseManagerService.proposedValueAndTimestamp = new ProposedValueAndTimestamp(chosenOrder, writeTimestamp, readTimestamp);
-    // }
-
-    // FIXME: adapt to new lease manager
-    private string GenerateLeases2()
-    {
-        return $"Node: {nodeId}";
     }
 }
