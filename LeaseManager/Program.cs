@@ -66,34 +66,35 @@ var builder = WebApplication.CreateBuilder(args);
 var nodeId = int.Parse(args[0]);
 
 
-List<(int, string)> leaseManagerServers = new List<(int, string)> {
-    (6001, "http://localhost:6001"),
-    (6002, "http://localhost:6002"),
-};
+List<(int, string)> leaseManagerServers;
+List<(int, string)> transactionManagerServers;
+int timeSlots;
+string starts;
+int lasts;
 
-List<(int, string)> transactionManagerServers = new List<(int, string)> {
-    (5001, "http://localhost:5001"),
-    (5002, "http://localhost:5002"),
-};
+if (args.Length > 1)
+{
+    leaseManagerServers = FromStringToNodes(args[1]);
+    transactionManagerServers = FromStringToNodes(args[2]);
+    timeSlots = int.Parse(args[3]);
+    starts = args[4];
+    lasts = int.Parse(args[5]);
+}
+else 
+{
+    leaseManagerServers = new List<(int, string)> {
+        (6001, "http://localhost:6001"),
+        (6002, "http://localhost:6002"),
+    };
 
-int timeSlots = 10;
-string starts = "null";
-int lasts = 10;
-
-
-/*
-List<(int, string)> leaseManagerServers = FromStringToNodes(args[1]);
-List<(int, string)> transactionManagerServers = FromStringToNodes(args[2]);
-int timeSlots = int.Parse(args[3]);
-string starts = args[4];
-int lasts = int.Parse(args[5]);
-*/
-
-/*
-Console.WriteLine("TimeSlots: " + timeSlots);
-Console.WriteLine("Starts: " + starts);
-Console.WriteLine("Lasts: " + lasts);
-*/
+    transactionManagerServers = new List<(int, string)> {
+        (5001, "http://localhost:5001"),
+        (5002, "http://localhost:5002"),
+    };
+    timeSlots = 10;
+    starts = "null";
+    lasts = 10;
+}
 
 string ip = Dns.GetHostEntry("localhost").AddressList[0].ToString();
 builder.WebHost.ConfigureKestrel(options =>
@@ -119,21 +120,15 @@ var app = builder.Build();
 app.MapGrpcService<LeaseManagerService>();
 app.MapGrpcService<PaxosService>();
 
-if (starts == "null") // used for testing only
+if (starts != "null") // used for testing only
 {
-    Console.WriteLine("Starting!");
-    paxosService.Init();
-    app.Run();
-    return;
+    DateTime? startTime = FromStringToDateTime(starts);
+    int timeSpan = GetSecondsApart(startTime.Value, DateTime.Now);
+    Console.WriteLine("LM Waiting " + timeSpan + " seconds to start!");
+    await Task.Delay(timeSpan * 1000);
+    Console.WriteLine("LM Starting!");
 }
 
-DateTime? startTime = FromStringToDateTime(starts);
-int timeSpan = GetSecondsApart(startTime.Value, DateTime.Now);
-
-Console.WriteLine("Waiting " + timeSpan + " seconds to start!");
-await Task.Delay(timeSpan * 1000);
-
-Console.WriteLine("Starting!");
 paxosService.Init();
 app.Run();
 

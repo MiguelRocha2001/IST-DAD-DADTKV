@@ -29,7 +29,7 @@ P c6 C cs6
 S 100
 #
 # this test starts at 15:30:15 (physical wall time)
-T 15:48:15
+T 16:18:05
 #
 # Each time slots lasts 10000 miliseconds
 D 10000 
