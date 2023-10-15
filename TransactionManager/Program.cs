@@ -111,6 +111,8 @@ if (starts != "null") // used for testing only
 }
 
 DadTkvService dadTkvService = new DadTkvService(GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2);
+LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService);
+TransactionManagerService transactionManagerService = new TransactionManagerService(dadTkvService);
 
 string ip = Dns.GetHostEntry("localhost").AddressList[0].ToString();
 builder.WebHost.ConfigureKestrel(options =>
@@ -118,12 +120,11 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Listen(IPAddress.Parse(ip), transactionManagerServers[nodeId].Item1);
 });
 
-LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService);
-
 
 builder.Services.AddGrpc();
 builder.Services.AddSingleton<DadTkvService>(dadTkvService);
 builder.Services.AddSingleton<LeaseManagerService>(leaseManagerService);
+builder.Services.AddSingleton<TransactionManagerService>(transactionManagerService);
 
 var app = builder.Build();
 
@@ -131,12 +132,6 @@ var app = builder.Build();
 
 app.MapGrpcService<DadTkvService>();
 app.MapGrpcService<LeaseManagerService>();
-/*
-using var channel = GrpcChannel.ForAddress("http://localhost:7001");
-var client = new DadTkvLeaseManagerService.DadTkvLeaseManagerServiceClient(channel);
-RequestLeaseRequest request = new RequestLeaseRequest();
-request.TransactionManager = "localhost:7001";
-client.RequestLease(request);
-*/
+app.MapGrpcService<TransactionManagerService>();
 
 app.Run();

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option csharp_namespace = "GrpcTransactionService";
+
+package transaction;
+
+import "Protos/LeaseService.proto";
+
+service TransactionService {
+    rpc ReleaseLease (ReleaseLeaseMessage) returns (Empty);
+}
+
+message Empty {}
+
+message ReleaseLeaseMessage {
+    lease.Lease lease = 1;
+}

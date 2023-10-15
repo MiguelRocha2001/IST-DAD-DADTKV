@@ -30,9 +30,6 @@ class ListLeaseOrderComparator : EqualityComparer<List<LeaseOrder>>
         StructuralComparisons.StructuralEqualityComparer.GetHashCode(l.ToArray());
 }
 
-
-
-
 public class PaxosService : Paxos.PaxosBase
 {
     LeaseManagerService leaseManagerService;

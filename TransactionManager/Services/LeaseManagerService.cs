@@ -2,10 +2,25 @@ namespace TransactionManager.Services;
 
 using Grpc.Core;
 using GrpcLeaseService;
+using System.Collections;
+using System.Collections.Concurrent;
+using System.Security.AccessControl;
+
+class ListLeaseOrderComparator : EqualityComparer<List<LeaseOrder>>
+{
+    public override bool Equals(List<LeaseOrder>? l1, List<LeaseOrder>? l2) =>
+        StructuralComparisons.StructuralEqualityComparer.Equals(l1?.ToArray(), l2?.ToArray());
+
+    public override int GetHashCode(List<LeaseOrder> l) =>
+        StructuralComparisons.StructuralEqualityComparer.GetHashCode(l.ToArray());
+}
 
 public class LeaseManagerService : LeaseService.LeaseServiceBase
 {
     DadTkvService dadTkvService;
+    private int QUORUM_SIZE = 2; // TODO: change later
+    ConcurrentDictionary<List<LeaseOrder>, int> acceptedValues = new(new ListLeaseOrderComparator());
+    List<LeaseOrder> requestedLeasesOrder; // holds the requested leases and the respective order
 
     public LeaseManagerService(DadTkvService dadTkvService)
     {
@@ -14,66 +29,56 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
 
     public override Task<Empty> SendLeasesOrder(LeasesResponse request, ServerCallContext context)
     {
-        /*
-        HashSet<Lease> ExtractTransactionManagerLeases()
-        {
-            HashSet<Lease> transactionManagerLeases = new HashSet<Lease>();
-            foreach (Lease lease in request.Leases)
-            {
-                if (lease.TransactionManagerId == dadTkvService.nodeUrl)
-                    transactionManagerLeases.Add(lease);
-            }
-            return transactionManagerLeases;
-        }
-        */
-
-        /**
-            Removes all leases that are conflicted with the new ones
-        */
-        void RemoveConflictedLeases(IEnumerable<Lease> leases)
-        {
-            foreach (Lease lease in leases)
-            {
-                if (lease.TransactionManagerId == dadTkvService.nodeUrl)
-                    continue;
-                else
-                {
-                    foreach (Lease localLease in dadTkvService.leases)
-                    {
-                        foreach (string requestId in localLease.RequestIds)
-                        {
-                            if (lease.RequestIds.Contains(requestId))
-                            {
-                                dadTkvService.leases.Remove(localLease);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         Console.WriteLine("Received new assigment of leases");
-
         Console.WriteLine("LeasesOrder: " + request.LeaseOrder);
 
-        // RemoveConflictedLeases(request.LeaseOrder);
-        
-        // HashSet<Lease> leases = ExtractTransactionManagerLeases();
-        /*
-        foreach (Lease lease in leases) // update leases
+        int count = acceptedValues.AddOrUpdate(request.LeaseOrder.ToList(), 1, (k, v) => v + 1);
+        if (count == QUORUM_SIZE)
         {
-            if (lease.TransactionManagerId == dadTkvService.nodeUrl)
-                dadTkvService.leases.Add(lease);
+            Console.WriteLine("Quorum reached");
+            requestedLeasesOrder = request.LeaseOrder.ToList();
+            UpdateLeases();
+            dadTkvService.WakeUpWaitingTransactionRequests(); // wakes waiting transactions
         }
 
-        dadTkvService.WakeUpWaitingTransactionRequests();
-        */
         return Task.FromResult(new Empty());
     }
 
-    public override Task<Empty> RequestLease(Lease request, ServerCallContext context)
+    public void LeaseReleased(Lease releasedLease)
     {
-        throw new NotImplementedException();
+        bool ConflictsWith(Lease l1, Lease l2) =>
+            l1.RequestIds.Intersect(l2.RequestIds).Any();
+
+        void DecreaseOrder(LeaseOrder leaseOrder)
+        {
+            foreach (LeaseOrder l in requestedLeasesOrder)
+            {
+                if (l.Lease.Equals(leaseOrder.Lease))
+                {
+                    l.Order--;
+                    break;
+                }   
+            }
+            leaseOrder.Order--;
+        }
+
+        Console.WriteLine("LeaseReleased: " + releasedLease);
+        foreach (LeaseOrder leaseOrder in requestedLeasesOrder)
+        {
+            if (ConflictsWith(releasedLease, leaseOrder.Lease))
+                DecreaseOrder(leaseOrder);  
+        }
+        UpdateLeases();
+    }
+
+    public void UpdateLeases()
+    {
+        Console.WriteLine("Updating leases");
+        foreach (LeaseOrder leaseOrder in requestedLeasesOrder)
+        {
+            if (leaseOrder.Order == 0)
+                dadTkvService.leases.Add(leaseOrder.Lease);
+        }
+        dadTkvService.WakeUpWaitingTransactionRequests(); // wakes waiting transactions
     }
 }
