@@ -44,6 +44,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
         }
     }
 
+    /*
     public void Send(LeasesResponse response)
     {
         for (int id = 0; id < nodes.Count(); id++)
@@ -69,6 +70,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
             });
         }
     }
+    */
 
     /**
         Prints exception message, awaits for backoffTimeout and returns the new backoffTimeout.

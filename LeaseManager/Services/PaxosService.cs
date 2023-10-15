@@ -10,12 +10,23 @@ using GrpcLeaseService;
 using System.Collections;
 using System.Collections.Concurrent;
 
+/*
 class ListLeaseComparator : EqualityComparer<List<Lease>>
 {
     public override bool Equals(List<Lease>? l1, List<Lease>? l2) =>
         StructuralComparisons.StructuralEqualityComparer.Equals(l1?.ToArray(), l2?.ToArray());
 
     public override int GetHashCode(List<Lease> l) =>
+        StructuralComparisons.StructuralEqualityComparer.GetHashCode(l.ToArray());
+}
+*/
+
+class ListLeaseComparator : EqualityComparer<HashSet<Tuple<int, List<Lease>>>>
+{
+    public override bool Equals(HashSet<Tuple<int, List<Lease>>>? l1, HashSet<Tuple<int, List<Lease>>>? l2) =>
+        StructuralComparisons.StructuralEqualityComparer.Equals(l1?.ToArray(), l2?.ToArray());
+
+    public override int GetHashCode(HashSet<Tuple<int, List<Lease>>> l) =>
         StructuralComparisons.StructuralEqualityComparer.GetHashCode(l.ToArray());
 }
 
@@ -39,7 +50,9 @@ public class PaxosService : Paxos.PaxosBase
     object lockAcceptMethod = new object();
     object lockAcceptedMethod = new object();
 
-    ConcurrentDictionary<List<Lease>, int> acceptedValues = new(new ListLeaseComparator());
+    //ConcurrentDictionary<List<Lease>, int> acceptedValues = new(new ListLeaseComparator());
+    ConcurrentDictionary<HashSet<Tuple<int, List<Lease>>>, int> acceptedValues = new();
+    //ConcurrentDictionary<HashSet<Tuple<string, List<string>>> , int> acceptedValues = new();
     AcceptedValue? highestAcceptedValue = null;
 
     public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService)
@@ -280,9 +293,10 @@ public class PaxosService : Paxos.PaxosBase
                                     if (acceptedValue is null)
                                     {
                                         acceptedValue = new();
-                                        var leases = GenerateNewLeases();
+                                        //var leases = GenerateNewLeases();
+                                        List<LeaseOrder> decidedOrder = AtributeLeaseRequestOrder();
                                         InsertOrIncrementAcceptedValue(leases);
-                                        acceptedValue.Leases.Add(leases);
+                                        acceptedValue.LeaseOrder.AddRange(decidedOrder);
                                     }
                                     acceptedValue.Id = currentEpochId;
                                     Task.Run(() => BroadcastAcceptRequest(acceptedValue, tokenSource, ct), ct);
@@ -415,7 +429,8 @@ public class PaxosService : Paxos.PaxosBase
         The value is generated based on the requests received.
         The previous Leases are retained. New Leases are generated based on the requests.
         This also cleans the requests list.
-*/
+    */
+    /*
     private List<Lease> GenerateNewLeases()
     {
         // AcceptedValue newAcceptedValue = new();
@@ -431,6 +446,49 @@ public class PaxosService : Paxos.PaxosBase
             }
         }
         return leases;
+    }
+    */
+
+    private List<LeaseOrder> AtributeLeaseRequestOrder()
+    {
+        /**
+            Checks if current order has a lease that conflicts with the new lease.
+            If not, adds the new lease to the order, as the first element.
+            If yes, adds the new lease to the order, after the conflicting lease.
+        */
+        HashSet<Tuple<int, Lease>> OrderNewLeaseRequest(Lease lease, HashSet<Tuple<int, Lease>> order)
+        {
+            int orderNumber = 0;
+            foreach (string requestId in lease.RequestIds)
+            {
+                foreach (Tuple<int, Lease> tuple in order)
+                {    
+                    if (tuple.Item2.RequestIds.Contains(requestId))
+                    {
+                        if (tuple.Item1 >= orderNumber)
+                            orderNumber = tuple.Item1 + 1;
+                    }
+                }
+            }
+            order.Add(Tuple.Create(orderNumber, lease));
+            return order;
+        }
+
+        HashSet<Tuple<int, Lease>> order = new HashSet<Tuple<int, Lease>>();
+        List<Lease> leaseRequests = leaseManagerService.GetLeaseRequests();
+        foreach (Lease lease in leaseRequests)
+        {
+            order = OrderNewLeaseRequest(lease, order);
+        }
+        List<LeaseOrder> leasesOrder = new List<LeaseOrder>();
+        foreach (Tuple<int, Lease> tuple in order)
+        {
+            LeaseOrder leaseOrder = new LeaseOrder();
+            leaseOrder.Lease = tuple.Item2;
+            leaseOrder.Order = tuple.Item1;
+            leasesOrder.Add(leaseOrder);
+        }
+        return leasesOrder;
     }
 
     private int InsertOrIncrementAcceptedValue(List<Lease> leases) =>

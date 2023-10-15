@@ -37,8 +37,19 @@ message AcceptedRequest {
   AcceptedValue acceptedValue = 3;
 }
 
+/*
 message AcceptedValue {
   int32 id = 1;
   repeated lease.Lease leases = 2;
 }
+*/
 
+message AcceptedValue {
+  int32 id = 1;
+  repeated LeaseOrder leaseOrder = 2;
+}
+
+message LeaseOrder {
+  lease.Lease lease = 1;
+  int32 order = 2;
+}
