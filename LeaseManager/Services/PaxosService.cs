@@ -25,8 +25,8 @@ public class PaxosService : Paxos.PaxosBase
     LeaseManagerService leaseManagerService;
     const string clientScriptFilename = "../configuration_sample";
     readonly int QUORUM_SIZE;
-    int timeSlot;
-    int nOfSlots;
+    int timeSlots; // TODO: use this
+    int slotTime;
     int nodeId;
     GrpcChannel[] nodes;
     int currentEpoch = 1;
@@ -42,7 +42,7 @@ public class PaxosService : Paxos.PaxosBase
     ConcurrentDictionary<List<Lease>, int> acceptedValues = new(new ListLeaseComparator());
     AcceptedValue? highestAcceptedValue = null;
 
-    public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService)
+    public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService, int timeSlots, int slotTime)
     {
         Console.WriteLine(nodeId);
 
@@ -52,6 +52,8 @@ public class PaxosService : Paxos.PaxosBase
         this.nodes = nodes;
         this.leaseManagerService = leaseManagerService;
         this.currentEpochId = nodeId;
+        this.timeSlots = timeSlots;
+        this.slotTime = slotTime;
     }
 
     public async void Init()
@@ -60,7 +62,8 @@ public class PaxosService : Paxos.PaxosBase
         DateTime? startEpochTime = null;
         CancellationTokenSource tokenSource = new();
         CancellationToken ct = tokenSource.Token;
-        TimeSpan epochTimeInterval = TimeSpan.FromSeconds(10);
+        //TimeSpan epochTimeInterval = TimeSpan.FromSeconds(10);
+        TimeSpan epochTimeInterval = TimeSpan.FromSeconds(slotTime);
 
         void ResetProperties()
         {
@@ -425,6 +428,7 @@ public class PaxosService : Paxos.PaxosBase
     }
 
 
+    /*
     private void ProcessConfigurationFile()
     {
         IEnumerator<string> lines = File.ReadLines(clientScriptFilename).GetEnumerator();
@@ -446,7 +450,7 @@ public class PaxosService : Paxos.PaxosBase
                         // TODO: create a new lease manager
                     }
                 }
-                */
+                /*
                 if (line.StartsWith('D'))
                 {
                     timeSlot = int.Parse(firstToken);
@@ -458,6 +462,7 @@ public class PaxosService : Paxos.PaxosBase
             }
         }
     }
+    */
 
     private void CalculateNewCurrentEpochId(int minimumId)
     {

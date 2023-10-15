@@ -2,7 +2,7 @@
 using Grpc.Net.Client;
 using GrpcDADTKVClient;
 
-Thread.Sleep(3000);
+Thread.Sleep(300000); // Used for testing only
 
 string clientScriptFilename = args[0];
 

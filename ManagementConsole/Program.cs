@@ -13,6 +13,11 @@ IEnumerator<string> lines = File.ReadLines(systemConfigFilePath).GetEnumerator()
 List<String> transactionManagersUrls = new List<string>();
 List<String> leaseManagersUrls = new List<string>();
 
+// TODO: later check if they are unseiged
+int timeSlots = 0;
+string starts = "";
+int lasts = 0;
+
 void KillProcesses(HashSet<Process> processes)
 {
     Console.WriteLine("Killing all processes!");
@@ -47,13 +52,13 @@ string BuildLeaseManagerArguments(string nodeId)
     leaseManagersArg = leaseManagersArg.Trim(','); // removes last comma
     leaseManagersArg += "]";
 
-    return nodeIdArg + " " + leaseManagersArg + " " + GetTransactionManagerUrlsArgument();
+    return nodeIdArg + " " + leaseManagersArg + " " + GetTransactionManagerUrlsArgument() + " " + timeSlots + " " + starts + " " + lasts;
 }
 
 string BuildTransactionManagerArguments(string nodeId)
 {
     string nodeIdArg = nodeId.Last().ToString();
-    return nodeIdArg + " " + GetTransactionManagerUrlsArgument();
+    return nodeIdArg + " " + GetTransactionManagerUrlsArgument() + " " + timeSlots + " " + starts + " " + lasts;
 }
 
 // parse system script
@@ -64,6 +69,22 @@ while (lines.MoveNext())
     {
         string[] split = line.Split(' ');
         processesConfig.Add(split);
+    }
+    else
+    {
+        string[] split = line.Split(' ');
+        if (split[0] == "S")
+        {
+            timeSlots = int.Parse(split[1]);
+        }
+        else if (split[0] == "T")
+        {
+            starts = split[1];
+        }
+        else if (split[0] == "D")
+        {
+            lasts = int.Parse(split[1]);
+        }
     }
 }
 
