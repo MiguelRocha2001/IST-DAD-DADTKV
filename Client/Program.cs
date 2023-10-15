@@ -6,8 +6,19 @@ Thread.Sleep(1); // Used for testing only
 
 //string clientScriptFilename = args[0];
 
+string transactionManagerServer;
+if (args[0] == "0")
+{
+    transactionManagerServer = "http://localhost:5001";
+}
+else
+{
+    transactionManagerServer = "http://localhost:5002";
+}
+
+
 // The port number must match the port of the gRPC server.
-using var channel = GrpcChannel.ForAddress("http://localhost:5001"); // grpc channel
+using var channel = GrpcChannel.ForAddress(transactionManagerServer); // grpc channel
 var client = new DADTKV.DADTKVClient(channel); // grpc client
 client.TxSubmit(new TxSubmitRequest
 {

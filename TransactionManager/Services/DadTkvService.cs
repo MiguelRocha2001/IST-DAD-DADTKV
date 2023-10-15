@@ -13,6 +13,7 @@ public class DadTkvService : DADTKV.DADTKVBase
     HashSet<string> tmNodes = new HashSet<string>(); // set of all TM nodes (excluding this one)
     HashSet<DadInt> storage = new HashSet<DadInt>(); // set of all dadInts stored in this node
     public HashSet<Tuple<bool, Lease>> leases = new HashSet<Tuple<bool, Lease>>(); // set of all leases
+    private HashSet<Tuple<Lease, int>> requestedLeases = new HashSet<Tuple<Lease, int>>(); // set of all requested leases
     GrpcChannel[] nodes; // array of all nodes
     object lockObject = new object();
 
@@ -161,6 +162,7 @@ public class DadTkvService : DADTKV.DADTKVBase
                 {
                     if (leaseTuple.Item1) // release lease after transaction
                     {
+                        leases.Remove(leaseTuple);
                         foreach (GrpcChannel channel in nodes)
                         {
                             if (channel.Target == nodeUrl)
@@ -190,6 +192,42 @@ public class DadTkvService : DADTKV.DADTKVBase
             return lease;
         }
 
+        void DecreaseLeaseRequestCount(Lease lease)
+        {
+            foreach (Tuple<Lease, int> requestedLease in requestedLeases)
+            {
+                if (requestedLease.Item1.Equals(lease))
+                {
+                    int count = requestedLease.Item2;
+                    if (count == 1) // this is the last request for this lease
+                    {
+                        requestedLeases.Remove(requestedLease);
+                        ReleaseLeaseIfNecessary(lease);
+                    }
+                    else
+                    {
+                        requestedLeases.Remove(requestedLease);
+                        requestedLeases.Add(new Tuple<Lease, int>(lease, count - 1)); // decreases the number of requests for this lease
+                    }
+                    break;
+                }
+            }
+        }
+
+        void CheckIfRequestWasAlreadyMade(Lease lease)
+        {
+            foreach (Tuple<Lease, int> requestedLease in requestedLeases)
+            {
+                if (requestedLease.Item1.Equals(lease))
+                {
+                    int count = requestedLease.Item2;
+                    requestedLeases.Remove(requestedLease);
+                    requestedLeases.Add(new Tuple<Lease, int>(lease, count + 1)); // increases the number of requests for this lease
+                    break;
+                }
+            }
+        }
+
         Console.WriteLine($"Client: {request.Client}");
 
         HashSet<string> permissions = request.Writes.Select(x => x.Key).ToHashSet()
@@ -203,7 +241,10 @@ public class DadTkvService : DADTKV.DADTKVBase
             {
                 Console.WriteLine("Leases not available");
 
+                CheckIfRequestWasAlreadyMade(lease);
+
                 RequestLease(lease);
+                requestedLeases.Add(new Tuple<Lease, int>(lease, 1)); // adds the lease to the requested leases
                 lock (lockObject) 
                 {
                     Monitor.Wait(lockObject); // waits for some other thread wake it up when new leases are available
@@ -215,6 +256,8 @@ public class DadTkvService : DADTKV.DADTKVBase
         Console.WriteLine("Leases available");
         
         HashSet<DadInt> result = DoTransaction(request.Client, request.Reads, request.Writes); // execute transaction
+
+        DecreaseLeaseRequestCount(lease); // decreases the number of requests for this lease
 
         ReleaseLeaseIfNecessary(lease);
 

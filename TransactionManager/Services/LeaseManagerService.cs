@@ -87,9 +87,22 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
             }
         }
 
+
+
         Console.WriteLine("Updating leases");
+
         foreach (Lease lease in leases)
         {
+            // if lease is not ours and we have one with the same permissions, remove it
+            if (lease.TransactionManagerId != dadTkvService.nodeId.ToString())
+            {
+                if (dadTkvService.leases.Where(l => ConflictsWith(l.Item2, lease)).Any())
+                {
+                    dadTkvService.leases.Remove(dadTkvService.leases.Where(l => ConflictsWith(l.Item2, lease)).First()); // removes lease
+                    Console.WriteLine("Lease with permissions " + lease.RequestIds + " removed");
+                }
+            }
+
             // select leases that belong to this node
             List<Lease> selfLeaseRequests = leases.Where(l => l.TransactionManagerId == dadTkvService.nodeId.ToString()).ToList();
             ComputeLeases(selfLeaseRequests);
