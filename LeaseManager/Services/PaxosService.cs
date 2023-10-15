@@ -10,7 +10,6 @@ using GrpcLeaseService;
 using System.Collections;
 using System.Collections.Concurrent;
 
-/*
 class ListLeaseComparator : EqualityComparer<List<Lease>>
 {
     public override bool Equals(List<Lease>? l1, List<Lease>? l2) =>
@@ -19,16 +18,7 @@ class ListLeaseComparator : EqualityComparer<List<Lease>>
     public override int GetHashCode(List<Lease> l) =>
         StructuralComparisons.StructuralEqualityComparer.GetHashCode(l.ToArray());
 }
-*/
 
-class ListLeaseOrderComparator : EqualityComparer<List<LeaseOrder>>
-{
-    public override bool Equals(List<LeaseOrder>? l1, List<LeaseOrder>? l2) =>
-        StructuralComparisons.StructuralEqualityComparer.Equals(l1?.ToArray(), l2?.ToArray());
-
-    public override int GetHashCode(List<LeaseOrder> l) =>
-        StructuralComparisons.StructuralEqualityComparer.GetHashCode(l.ToArray());
-}
 
 public class PaxosService : Paxos.PaxosBase
 {
@@ -49,8 +39,7 @@ public class PaxosService : Paxos.PaxosBase
     object lockAcceptMethod = new object();
     object lockAcceptedMethod = new object();
 
-    //ConcurrentDictionary<List<Lease>, int> acceptedValues = new(new ListLeaseComparator());
-    ConcurrentDictionary<List<LeaseOrder>, int> acceptedValues = new(new ListLeaseOrderComparator());
+    ConcurrentDictionary<List<Lease>, int> acceptedValues = new(new ListLeaseComparator());
     AcceptedValue? highestAcceptedValue = null;
 
     public PaxosService(int nodeId, GrpcChannel[] nodes, LeaseManagerService leaseManagerService, int timeSlots, int slotTime)
@@ -194,9 +183,13 @@ public class PaxosService : Paxos.PaxosBase
             if (highestAcceptedValue is null || highestAcceptedValue.Id < request.AcceptedValue.Id)
                 highestAcceptedValue = request.AcceptedValue;
 
-            List<LeaseOrder> leaseOrders = request.AcceptedValue.LeaseOrder.ToList();
-            int count = InsertOrIncrementAcceptedValue(leaseOrders);
-            SendLeasesOrder(leaseOrders);
+            int count = InsertOrIncrementAcceptedValue(request.AcceptedValue.Leases.ToList());
+            leaseManagerService.Send(new LeasesResponse
+            {
+                EpochId = currentEpoch,
+                Leases = { request.AcceptedValue.Leases }
+            });
+
             if (count == QUORUM_SIZE)
             {
                 Console.WriteLine($"[{nodeId}] Quorum was reached on {request.AcceptedValue}");
@@ -217,7 +210,7 @@ public class PaxosService : Paxos.PaxosBase
         // TODO: I think there is no need for lock here.
         lock (lockAcceptedMethod)
         {
-            int count = InsertOrIncrementAcceptedValue(request.AcceptedValue.LeaseOrder.ToList());
+            int count = InsertOrIncrementAcceptedValue(request.AcceptedValue.Leases.ToList());
             if (count == QUORUM_SIZE)
             {
                 Console.WriteLine($"[{nodeId}] Quorum was reached on {request.AcceptedValue}");
@@ -296,12 +289,14 @@ public class PaxosService : Paxos.PaxosBase
                                     if (acceptedValue is null)
                                     {
                                         acceptedValue = new();
-                                        //var leases = leaseManagerService.GetLeaseRequests();
-                                        //InsertOrIncrementAcceptedValue(leases);
-                                        List<LeaseOrder> leasesOrder = AtributeLeaseRequestOrder(); // decides the order of the leases
-                                        InsertOrIncrementAcceptedValue(leasesOrder);
-                                        acceptedValue.LeaseOrder.AddRange(leasesOrder);
-                                        SendLeasesOrder(leasesOrder); // sends newly generated leases order to TM nodes
+                                        var leases = leaseManagerService.GetLeaseRequests();
+                                        InsertOrIncrementAcceptedValue(leases);
+                                        leaseManagerService.Send(new LeasesResponse
+                                        {
+                                            EpochId = currentEpoch,
+                                            Leases = { leases }
+                                        });
+                                        acceptedValue.Leases.Add(leases);
                                     }
                                     acceptedValue.Id = currentEpochId;
                                     Task.Run(() => BroadcastAcceptRequest(acceptedValue, tokenSource, ct), ct);
@@ -429,8 +424,8 @@ public class PaxosService : Paxos.PaxosBase
         await Task.Delay(tries * 2 * 1000);
     }
 
-    private int InsertOrIncrementAcceptedValue(List<LeaseOrder> leasesOrder) =>
-        acceptedValues.AddOrUpdate(leasesOrder, 1, (k, v) => v + 1);
+    private int InsertOrIncrementAcceptedValue(List<Lease> leases) =>
+        acceptedValues.AddOrUpdate(leases, 1, (k, v) => v + 1);
 
 
     private void Decide()
@@ -439,98 +434,9 @@ public class PaxosService : Paxos.PaxosBase
         {
             EpochId = currentEpoch,
         };
-        response.LeaseOrder.Add(acceptedValues.First(v => v.Value == QUORUM_SIZE).Key);
+        response.Leases.Add(acceptedValues.First(v => v.Value == QUORUM_SIZE).Key);
         //leaseManagerService.Send(response);
     }
-
-    private List<LeaseOrder> AtributeLeaseRequestOrder()
-    {
-        /**
-            Checks if current order has a lease that conflicts with the new lease.
-            If not, adds the new lease to the order, as the first element.
-            If yes, adds the new lease to the order, after the conflicting lease.
-        */
-        HashSet<Tuple<int, Lease>> OrderNewLeaseRequest(Lease lease, HashSet<Tuple<int, Lease>> order)
-        {
-            int orderNumber = 0;
-            foreach (string requestId in lease.RequestIds)
-            {
-                foreach (Tuple<int, Lease> tuple in order)
-                {    
-                    if (tuple.Item2.RequestIds.Contains(requestId))
-                    {
-                        if (tuple.Item1 >= orderNumber)
-                            orderNumber = tuple.Item1 + 1;
-                    }
-                }
-            }
-            order.Add(Tuple.Create(orderNumber, lease));
-            return order;
-        }
-
-        HashSet<Tuple<int, Lease>> order = new HashSet<Tuple<int, Lease>>();
-        List<Lease> leaseRequests = leaseManagerService.GetLeaseRequests();
-        foreach (Lease lease in leaseRequests)
-        {
-            order = OrderNewLeaseRequest(lease, order);
-        }
-        List<LeaseOrder> leasesOrder = new List<LeaseOrder>();
-        foreach (Tuple<int, Lease> tuple in order)
-        {
-            LeaseOrder leaseOrder = new LeaseOrder();
-            leaseOrder.Lease = tuple.Item2;
-            leaseOrder.Order = tuple.Item1;
-            leasesOrder.Add(leaseOrder);
-        }
-        return leasesOrder;
-    }
-
-    private void SendLeasesOrder(List<LeaseOrder> leasesOrder)
-    {
-        LeasesResponse response = new LeasesResponse
-        {
-            EpochId = currentEpoch,
-        };
-        response.LeaseOrder.AddRange(leasesOrder);
-        leaseManagerService.Send(response);
-    }
-
-
-    /*
-    private void ProcessConfigurationFile()
-    {
-        IEnumerator<string> lines = File.ReadLines(clientScriptFilename).GetEnumerator();
-        while (lines.MoveNext())
-        {
-            string line = lines.Current;
-            if (!line.StartsWith('#')) // not a comment
-            {
-                string[] split = line.Split(' ');
-                string firstToken = split[1];
-                /*
-                if (line.StartsWith('P'))
-                {
-                    string type = split[2];
-                    if (type == "L")
-                    {
-                        string name = firstToken;
-                        int href = int.Parse(split[3]);
-                        // TODO: create a new lease manager
-                    }
-                }
-                /*
-                if (line.StartsWith('D'))
-                {
-                    timeSlot = int.Parse(firstToken);
-                }
-                else if (line.StartsWith('S'))
-                {
-                    nOfSlots = int.Parse(firstToken);
-                }
-            }
-        }
-    }
-    */
 
     private void CalculateNewCurrentEpochId(int minimumId)
     {

@@ -2,9 +2,9 @@
 using Grpc.Net.Client;
 using GrpcDADTKVClient;
 
-Thread.Sleep(300000); // Used for testing only
+Thread.Sleep(1); // Used for testing only
 
-string clientScriptFilename = args[0];
+//string clientScriptFilename = args[0];
 
 // The port number must match the port of the gRPC server.
 using var channel = GrpcChannel.ForAddress("http://localhost:5001"); // grpc channel

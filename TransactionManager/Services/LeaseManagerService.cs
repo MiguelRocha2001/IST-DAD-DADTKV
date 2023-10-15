@@ -6,12 +6,12 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Security.AccessControl;
 
-class ListLeaseOrderComparator : EqualityComparer<List<LeaseOrder>>
+class ListLeaseComparator : EqualityComparer<List<Lease>>
 {
-    public override bool Equals(List<LeaseOrder>? l1, List<LeaseOrder>? l2) =>
+    public override bool Equals(List<Lease>? l1, List<Lease>? l2) =>
         StructuralComparisons.StructuralEqualityComparer.Equals(l1?.ToArray(), l2?.ToArray());
 
-    public override int GetHashCode(List<LeaseOrder> l) =>
+    public override int GetHashCode(List<Lease> l) =>
         StructuralComparisons.StructuralEqualityComparer.GetHashCode(l.ToArray());
 }
 
@@ -19,8 +19,8 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
 {
     DadTkvService dadTkvService;
     private int quorumSize;
-    ConcurrentDictionary<List<LeaseOrder>, int> acceptedValues = new(new ListLeaseOrderComparator());
-    List<LeaseOrder> requestedLeasesOrder; // holds the requested leases and the respective order
+    ConcurrentDictionary<List<Lease>, int> acceptedValues = new(new ListLeaseComparator());
+    List<Lease> leases = new();
 
     public LeaseManagerService(DadTkvService dadTkvService, int quorumSize)
     {
@@ -28,16 +28,16 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
         this.quorumSize = quorumSize;
     }
 
-    public override Task<Empty> SendLeasesOrder(LeasesResponse request, ServerCallContext context)
+    public override Task<Empty> SendLeases(LeasesResponse request, ServerCallContext context)
     {
         Console.WriteLine("Received new assigment of leases");
-        Console.WriteLine("LeasesOrder: " + request.LeaseOrder);
+        Console.WriteLine("Leases: " + request.Leases);
 
-        int count = acceptedValues.AddOrUpdate(request.LeaseOrder.ToList(), 1, (k, v) => v + 1);
+        int count = acceptedValues.AddOrUpdate(request.Leases.ToList(), 1, (k, v) => v + 1);
         if (count == quorumSize)
         {
             Console.WriteLine("Quorum reached");
-            requestedLeasesOrder = request.LeaseOrder.ToList();
+            leases = request.Leases.ToList();
             UpdateLeases();
             dadTkvService.WakeUpWaitingTransactionRequests(); // wakes waiting transactions
         }
@@ -47,38 +47,44 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
 
     public void LeaseReleased(Lease releasedLease)
     {
-        bool ConflictsWith(Lease l1, Lease l2) =>
-            l1.RequestIds.Intersect(l2.RequestIds).Any();
-
-        void DecreaseOrder(LeaseOrder leaseOrder)
-        {
-            foreach (LeaseOrder l in requestedLeasesOrder)
-            {
-                if (l.Lease.Equals(leaseOrder.Lease))
-                {
-                    l.Order--;
-                    break;
-                }   
-            }
-            leaseOrder.Order--;
-        }
-
-        Console.WriteLine("LeaseReleased: " + releasedLease);
-        foreach (LeaseOrder leaseOrder in requestedLeasesOrder)
-        {
-            if (ConflictsWith(releasedLease, leaseOrder.Lease))
-                DecreaseOrder(leaseOrder);  
-        }
+        leases.Remove(releasedLease);
         UpdateLeases();
     }
 
     public void UpdateLeases()
     {
-        Console.WriteLine("Updating leases");
-        foreach (LeaseOrder leaseOrder in requestedLeasesOrder)
+        bool ConflictsWith(Lease l1, Lease l2) =>
+            l1.RequestIds.Intersect(l2.RequestIds).Any();
+
+        void ComputeLeases(List<Lease> selfLeaseRequests)
         {
-            if (leaseOrder.Order == 0)
-                dadTkvService.leases.Add(leaseOrder.Lease);
+            foreach (Lease lease in selfLeaseRequests)
+            {
+                foreach (Lease lease1 in leases)
+                {
+                    // some other TM has a lease that conflicts with this one, with greater priority
+                    if (!lease.Equals(lease1) && ConflictsWith(lease, lease1))
+                    {
+                        break;
+                    }
+
+                    // we have priority
+                    if (lease.Equals(lease1))
+                    {
+                        dadTkvService.leases.Add(lease);
+                        dadTkvService.WakeUpWaitingTransactionRequests(); // wakes waiting transactions
+                        break;
+                    }
+                }
+            }
+        }
+
+        Console.WriteLine("Updating leases");
+        foreach (Lease lease in leases)
+        {
+            // select leases that belong to this node
+            List<Lease> selfLeaseRequests = leases.Where(l => l.TransactionManagerId == dadTkvService.nodeId.ToString()).ToList();
+            ComputeLeases(selfLeaseRequests);
         }
         dadTkvService.WakeUpWaitingTransactionRequests(); // wakes waiting transactions
     }

@@ -53,7 +53,7 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
                     try
                     {
                         var client = new LeaseService.LeaseServiceClient(nodes[idAux]);
-                        client.SendLeasesOrder(response);
+                        client.SendLeases(response);
                         break;
                     }
                     catch (Exception e)

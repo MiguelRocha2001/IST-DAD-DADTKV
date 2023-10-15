@@ -35,8 +35,8 @@ if (args.Length > 1)
 else
 {
     transactionManagerServers = new List<(int, string)> {
-        (5001, "http://localhost:5001"),
-        (5002, "http://localhost:5002"),
+        (5001, "http://localhost:6001"),
+        (5002, "http://localhost:6002"),
     };  
     quorumSize = 2;
     timeSlots = 10;
@@ -53,7 +53,7 @@ if (starts != "null") // used for testing only
     Console.WriteLine("TM Starting!");
 }
 
-DadTkvService dadTkvService = new DadTkvService(Utils.GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2);
+DadTkvService dadTkvService = new DadTkvService(Utils.GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2, nodeId);
 LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService, quorumSize);
 TransactionManagerService transactionManagerService = new TransactionManagerService(dadTkvService);
 
