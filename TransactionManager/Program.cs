@@ -3,62 +3,7 @@ using Microsoft.Net.Http.Headers;
 using TransactionManager.Services;
 using Grpc.Net.Client;
 using System.Net;
-
-static List<(int, string)> FromStringToNodes(string urls)
-{
-    urls = urls.Trim('[');
-    urls = urls.Trim(']');
-
-    List<(int, string)> nodes = new List<(int, string)>();
-    string[] leaseManagersUrlsAux = urls.Split(',');
-    foreach(string serverUlr in leaseManagersUrlsAux )
-    {
-        string[] split = serverUlr.Split(':');
-        nodes.Add((int.Parse(split[2]), serverUlr));
-    }
-    return nodes;
-}
-
-static GrpcChannel[] GetChannels(List<(int, string)> nodes)
-{
-    GrpcChannel[] channels = new GrpcChannel[nodes.Count];
-    int i = 0;
-    foreach (var node in nodes)
-    {
-        channels[i] = GrpcChannel.ForAddress(node.Item2);
-        i++;
-    }
-    return channels;
-}
-
-static DateTime? FromStringToDateTime(string starts)
-{
-    DateTime now = DateTime.Now;
-    string[] split = starts.Split(':');
-    if (split.Length != 3)
-    {
-        return null;
-    }
-    int hour = int.Parse(split[0]);
-    int minute = int.Parse(split[1]);
-    int second = int.Parse(split[2]);
-    return new DateTime(now.Year, now.Month, now.Day, hour, minute, second);
-}
-
-/**
-    Returns the seconds between two dates.
-    [startTime] shhouls be greater than [now].
-    @param startTime The start date.
-    @param now The end date.
-*/
-static int GetSecondsApart(DateTime startTime, DateTime now)
-{
-    TimeSpan timeSpan = startTime - now;
-    int totalSeconds = (int)timeSpan.TotalSeconds;
-    if (totalSeconds < 0)
-        throw new Exception("startTime is in the past!");
-    return totalSeconds;
-}
+using utils;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -77,10 +22,11 @@ int quorumSize; // same as the number of lease managers
 int timeSlots;
 string starts;
 int lasts;
+List<ProcessState> processState = new List<ProcessState>();
 
 if (args.Length > 1)
 {
-    transactionManagerServers = FromStringToNodes(args[1]);
+    transactionManagerServers = Utils.FromStringToNodes(args[1]);
     quorumSize = int.Parse(args[2]);
     timeSlots = int.Parse(args[3]);
     starts = args[4];
@@ -98,22 +44,16 @@ else
     lasts = 10;
 }
 
-/*
-Console.WriteLine("TimeSlots: " + timeSlots);
-Console.WriteLine("Starts: " + starts);
-Console.WriteLine("Lasts: " + lasts);
-*/
-
 if (starts != "null") // used for testing only
 {
-    DateTime? startTime = FromStringToDateTime(starts);
-    int timeSpan = GetSecondsApart(startTime.Value, DateTime.Now);
+    DateTime? startTime = Utils.FromStringToDateTime(starts);
+    int timeSpan = Utils.GetSecondsApart(startTime.Value, DateTime.Now);
     Console.WriteLine("TM Waiting " + timeSpan + " seconds to start!");
     await Task.Delay(timeSpan * 1000);
     Console.WriteLine("TM Starting!");
 }
 
-DadTkvService dadTkvService = new DadTkvService(GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2);
+DadTkvService dadTkvService = new DadTkvService(Utils.GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2);
 LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService, quorumSize);
 TransactionManagerService transactionManagerService = new TransactionManagerService(dadTkvService);
 

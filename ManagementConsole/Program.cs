@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
 
+enum ProcessState { NORMAL, CRASHED }
+
 const string systemConfigFilePath = "../configuration_sample";
 // const string systemConfigFilePath = "C:/Users/migas/Repos/dad-project/configuration_sample";
 const string CLIENT_PROCESS_FILE_PATH = "../Client/bin/Debug/net6.0/Client";
@@ -17,6 +19,8 @@ List<String> leaseManagersUrls = new List<string>();
 int timeSlots = 0;
 string starts = "";
 int lasts = 0;
+
+List<List<ProcessState>> processesState = new List<List<ProcessState>>();
 
 void KillProcesses(HashSet<Process> processes)
 {
@@ -55,11 +59,25 @@ string BuildLeaseManagerArguments(string nodeId)
     return nodeIdArg + " " + leaseManagersArg + " " + GetTransactionManagerUrlsArgument() + " " + timeSlots + " " + starts + " " + lasts;
 }
 
-string BuildTransactionManagerArguments(string nodeId)
+string BuildTransactionManagerArguments(string nodeId, int processIndex)
 {
     string nodeIdArg = nodeId.Last().ToString();
     int quorumSize = leaseManagersUrls.Count;
-    return nodeIdArg + " " + GetTransactionManagerUrlsArgument() + " " + quorumSize + " " + timeSlots + " " + starts + " " + lasts;
+    return nodeIdArg + " " + GetTransactionManagerUrlsArgument() + " " + quorumSize + " " + timeSlots + " " + starts + " " + lasts + " " + BuildProcessStateArgument(processIndex);
+}
+
+string BuildProcessStateArgument(int processIndex)
+{
+    string processStateArg = "[";
+    List<ProcessState> processStates = processesState[processIndex]; // fetches process states for this process
+    foreach (ProcessState processState in processStates)
+    {
+        processStateArg += processState == ProcessState.NORMAL ? "N" : "C";
+        processStateArg += ",";
+    }
+    processStateArg = processStateArg.Trim(','); // removes last comma
+    processStateArg += "]";
+    return processStateArg;
 }
 
 // parse system script
@@ -86,6 +104,16 @@ while (lines.MoveNext())
         {
             lasts = int.Parse(split[1]);
         }
+        else if (split[0] == "F")
+        {
+            int timeSlot = int.Parse(split[1]);
+            foreach (string node in split[2..])
+            {
+                if (node != "N" && node != "C") // N = normal, C = crashed
+                    break;
+                processesState[timeSlot].Add(node == "N" ? ProcessState.NORMAL : ProcessState.CRASHED);
+            }
+        }
     }
 }
 
@@ -109,6 +137,7 @@ try
 {
     foreach (string[] processConfig in processesConfig)
     {
+        int processIndex = processesConfig.IndexOf(processConfig);
         char type = processConfig[0][0];
         if (type == 'P') // process
         {
@@ -123,7 +152,7 @@ try
             if (processType == "T") // Transaction Manager
             {
                 newProcess.StartInfo.FileName = TRANSACTION_MANAGER_PROCESS_FILE_PATH;
-                newProcess.StartInfo.Arguments = BuildTransactionManagerArguments(nodeId);
+                newProcess.StartInfo.Arguments = BuildTransactionManagerArguments(nodeId, processIndex);
             }
             else if (processType == "L") // Lease Manager
             {
