@@ -10,16 +10,22 @@ public class DadTkvService : DADTKV.DADTKVBase
 {
     public string nodeUrl;
     public int nodeId;
-    HashSet<string> tmNodes = new HashSet<string>(); // set of all TM nodes (excluding this one)
     HashSet<DadInt> storage = new HashSet<DadInt>(); // set of all dadInts stored in this node
     public HashSet<Tuple<bool, Lease>> leases = new HashSet<Tuple<bool, Lease>>(); // set of all leases
     private HashSet<Tuple<Lease, int>> requestedLeases = new HashSet<Tuple<Lease, int>>(); // set of all requested leases
-    GrpcChannel[] nodes; // array of all nodes
+    GrpcChannel[] transactionManagerNodes; // array of all nodes
+    GrpcChannel[] leaseManagerNodes; // array of all nodes
     object lockObject = new object();
 
-    public DadTkvService(GrpcChannel[] nodes, string nodeUrl, int nodeId)
+    public DadTkvService(
+        GrpcChannel[] transactionManagerNodes,
+        GrpcChannel[] leaseManagerNodes,
+        string nodeUrl, 
+        int nodeId
+    )
     {
-        this.nodes = nodes;
+        this.transactionManagerNodes = transactionManagerNodes;
+        this.leaseManagerNodes = leaseManagerNodes;
         this.nodeUrl = nodeUrl;
         this.nodeId = nodeId;
     }
@@ -72,7 +78,7 @@ public class DadTkvService : DADTKV.DADTKVBase
 
     void RequestLease(Lease lease)
     {
-        foreach (GrpcChannel channel in nodes)
+        foreach (GrpcChannel channel in leaseManagerNodes)
         {
             var client = new LeaseService.LeaseServiceClient(channel);
             Task.FromResult(client.RequestLease(lease)); // this should not blcock. Change not to block
@@ -114,28 +120,26 @@ public class DadTkvService : DADTKV.DADTKVBase
         Executes the transaction locally, ie. without propagating the changes to the other nodes
         @return the transaction result
     */
-    HashSet<DadInt> ExecuteTransactionLocally(IEnumerable<string> reads, IEnumerable<DadInt> writes)
+    public HashSet<DadInt> ExecuteTransactionLocally(IEnumerable<string> reads, IEnumerable<DadInt> writes)
     {
         Console.WriteLine("Executing transaction locally...");
         HashSet<DadInt> result = ExecuteReadOperations(reads);
         ExecuteWriteOperations(writes);
+        Console.WriteLine("Transaction executed locally");
         return result;
     }
 
     /**
         Propagates the transaction to the other nodes
     */
-    void PropagateTransaction(string clientName, IEnumerable<string> reads, IEnumerable<DadInt> writes)
+    void PropagateTransaction(IEnumerable<DadInt> writes)
     {
-        foreach (string nodeUrl in tmNodes)
+        foreach (GrpcChannel channel in transactionManagerNodes)
         {
-            using var channel = GrpcChannel.ForAddress("http://localhost:" + nodeUrl); // grpc channel
-            var client = new DADTKV.DADTKVClient(channel); // grpc client
-            TxSubmitRequest request = new TxSubmitRequest(); // GRPC request
-            request.Client = clientName;
-            request.Reads.Add(reads);
-            request.Writes.Add(writes);
-            client.TxSubmit(request);
+            var client = new TransactionService.TransactionServiceClient(channel);
+            PropagateTransactionMessage propagateMessage = new PropagateTransactionMessage();
+            propagateMessage.Writes.Add(writes);
+            client.PropagateTransaction(propagateMessage);
         }
     }
 
@@ -147,7 +151,15 @@ public class DadTkvService : DADTKV.DADTKVBase
     {
         Console.WriteLine("Transaction requested by " + client);
         HashSet<DadInt> result = ExecuteTransactionLocally(reads, writes);
-        PropagateTransaction(client, reads, writes);
+        if (writes.ToList().Count > 0) 
+        {
+            PropagateTransaction(writes);
+            Console.WriteLine("Transaction propagated");
+        }
+        else 
+        {
+            Console.WriteLine("No need to propagate transaction");
+        }
         Console.WriteLine("Transaction finished");
         return result;
     }
@@ -163,7 +175,7 @@ public class DadTkvService : DADTKV.DADTKVBase
                     if (leaseTuple.Item1) // release lease after transaction
                     {
                         leases.Remove(leaseTuple);
-                        foreach (GrpcChannel channel in nodes)
+                        foreach (GrpcChannel channel in transactionManagerNodes)
                         {
                             if (channel.Target == nodeUrl)
                                 break;
@@ -255,7 +267,11 @@ public class DadTkvService : DADTKV.DADTKVBase
         
         Console.WriteLine("Leases available");
         
-        HashSet<DadInt> result = DoTransaction(request.Client, request.Reads, request.Writes); // execute transaction
+        HashSet<DadInt> result;
+        lock (lockObject) 
+        {
+            result = DoTransaction(request.Client, request.Reads, request.Writes); // execute transaction
+        }
 
         DecreaseLeaseRequestCount(lease); // decreases the number of requests for this lease
 

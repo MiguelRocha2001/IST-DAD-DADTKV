@@ -16,6 +16,7 @@ builder.Services.AddGrpc();
 int nodeId = int.Parse(args[0]);
 
 List<(int, string)> transactionManagerServers;
+List<(int, string)> leaseManagerServers;
 int quorumSize; // same as the number of lease managers
 
 // TODO: this will be used to update the fault tolerance state of the process...
@@ -27,6 +28,7 @@ List<ProcessState> processState = new List<ProcessState>();
 if (args.Length > 1)
 {
     transactionManagerServers = Utils.FromStringToNodes(args[1]);
+    throw new NotImplementedException("LeaseManagerServers parse not implemented!");
     quorumSize = int.Parse(args[2]);
     timeSlots = int.Parse(args[3]);
     starts = args[4];
@@ -35,9 +37,13 @@ if (args.Length > 1)
 else
 {
     transactionManagerServers = new List<(int, string)> {
-        (5001, "http://localhost:6001"),
-        (5002, "http://localhost:6002"),
+        (5001, "http://localhost:5001"),
+        (5002, "http://localhost:5002"),
     };  
+    leaseManagerServers = new List<(int, string)> {
+        (6001, "http://localhost:6001"),
+        (6002, "http://localhost:6002"),
+    };
     quorumSize = 2;
     timeSlots = 10;
     starts = "null";
@@ -53,7 +59,12 @@ if (starts != "null") // used for testing only
     Console.WriteLine("TM Starting!");
 }
 
-DadTkvService dadTkvService = new DadTkvService(Utils.GetChannels(transactionManagerServers), transactionManagerServers[nodeId].Item2, nodeId);
+DadTkvService dadTkvService = new DadTkvService(
+    Utils.GetChannels(transactionManagerServers),
+    Utils.GetChannels(leaseManagerServers), 
+    transactionManagerServers[nodeId].Item2, 
+    nodeId
+);
 LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService, quorumSize);
 TransactionManagerService transactionManagerService = new TransactionManagerService(dadTkvService);
 

@@ -87,8 +87,6 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
             }
         }
 
-
-
         Console.WriteLine("Updating leases");
 
         foreach (Lease lease in leases)

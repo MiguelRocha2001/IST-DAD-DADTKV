@@ -5,13 +5,19 @@ option csharp_namespace = "GrpcTransactionService";
 package transaction;
 
 import "Protos/LeaseService.proto";
+import "Protos/dadtkv.proto";
 
 service TransactionService {
     rpc ReleaseLease (ReleaseLeaseMessage) returns (Empty);
+    rpc PropagateTransaction (PropagateTransactionMessage) returns (Empty);
 }
 
 message Empty {}
 
 message ReleaseLeaseMessage {
     lease.Lease lease = 1;
+}
+
+message PropagateTransactionMessage {
+    repeated dadtkv.DadInt writes = 1;
 }

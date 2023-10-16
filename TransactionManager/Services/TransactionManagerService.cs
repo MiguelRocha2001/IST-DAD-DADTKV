@@ -18,4 +18,13 @@ public class TransactionManagerService : TransactionService.TransactionServiceBa
 
         return Task.FromResult(new Empty());
     }
+
+    public override Task<Empty> PropagateTransaction(PropagateTransactionMessage propagateTransactionMessage, ServerCallContext context)
+    {
+        Console.WriteLine($"Transaction propagation message received: {propagateTransactionMessage.Writes}");
+
+        dadTkvService.ExecuteTransactionLocally(new List<string>(), propagateTransactionMessage.Writes);
+
+        return Task.FromResult(new Empty());
+    }
 }
