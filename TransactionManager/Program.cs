@@ -21,7 +21,7 @@ int quorumSize; // same as the number of lease managers
 
 // TODO: this will be used to update the fault tolerance state of the process...
 int timeSlots;
-string starts;
+string? starts;
 int lasts;
 List<ProcessState> processState = new List<ProcessState>();
 
@@ -46,11 +46,11 @@ else
     };
     quorumSize = 2;
     timeSlots = 10;
-    starts = "null";
+    starts = null;
     lasts = 10;
 }
 
-if (starts != "null") // used for testing only
+if (starts is not null) // used for testing only
 {
     DateTime? startTime = Utils.FromStringToDateTime(starts);
     int timeSpan = Utils.GetSecondsApart(startTime.Value, DateTime.Now);

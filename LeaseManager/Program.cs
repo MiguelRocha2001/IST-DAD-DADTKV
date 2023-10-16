@@ -69,7 +69,7 @@ var nodeId = int.Parse(args[0]);
 List<(int, string)> leaseManagerServers;
 List<(int, string)> transactionManagerServers;
 int timeSlots;
-string starts;
+string? starts;
 int lasts;
 
 if (args.Length > 1)
@@ -92,7 +92,7 @@ else
         (5002, "http://localhost:5002"),
     };
     timeSlots = 10;
-    starts = "null";
+    starts = null;
     lasts = 10;
 }
 
@@ -120,7 +120,7 @@ var app = builder.Build();
 app.MapGrpcService<LeaseManagerService>();
 app.MapGrpcService<PaxosService>();
 
-if (starts != "null") // used for testing only
+if (starts is not null) // used for testing only
 {
     DateTime? startTime = FromStringToDateTime(starts);
     int timeSpan = GetSecondsApart(startTime.Value, DateTime.Now);

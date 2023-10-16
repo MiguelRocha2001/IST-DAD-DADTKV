@@ -75,6 +75,7 @@ public class PaxosService : Paxos.PaxosBase
             highestAcceptedValue = null;
         }
 
+        // TODO: Handle cancellation more gracefully
         while (true)
         {
             startEpochTime ??= DateTime.Now;
@@ -184,18 +185,17 @@ public class PaxosService : Paxos.PaxosBase
                 highestAcceptedValue = request.AcceptedValue;
 
             int count = InsertOrIncrementAcceptedValue(request.AcceptedValue.Leases.ToList());
-            leaseManagerService.Send(new LeasesResponse
+            Task.Run(() => leaseManagerService.Send(new LeasesResponse
             {
                 EpochId = currentEpoch,
                 Leases = { request.AcceptedValue.Leases }
-            });
+            }));
 
-            if (count == QUORUM_SIZE)
-            {
-                Console.WriteLine($"[{nodeId}] Quorum was reached on {request.AcceptedValue}");
-                Decide();
-            }
-            Task.Run(() => BroadcastAcceptedRequest(request.AcceptedValue));
+            // if (count == QUORUM_SIZE)
+            // {
+            //     Console.WriteLine($"[{nodeId}] Quorum was reached on {request.AcceptedValue}");
+            //     Decide();
+            // }
         }
         return Task.FromResult(new AcceptReply
         {
@@ -204,21 +204,21 @@ public class PaxosService : Paxos.PaxosBase
     }
 
 
-    public override Task<Empty> Accepted(AcceptedRequest request, ServerCallContext context)
-    {
-        Console.WriteLine($"[{nodeId}] AcceptedRequest received from {request.Id % nodes.Count()} with {request.AcceptedValue}.");
-        // TODO: I think there is no need for lock here.
-        lock (lockAcceptedMethod)
-        {
-            int count = InsertOrIncrementAcceptedValue(request.AcceptedValue.Leases.ToList());
-            if (count == QUORUM_SIZE)
-            {
-                Console.WriteLine($"[{nodeId}] Quorum was reached on {request.AcceptedValue}");
-                Decide();
-            }
-        }
-        return Task.FromResult(new Empty());
-    }
+    // public override Task<Empty> Accepted(AcceptedRequest request, ServerCallContext context)
+    // {
+    //     Console.WriteLine($"[{nodeId}] AcceptedRequest received from {request.Id % nodes.Count()} with {request.AcceptedValue}.");
+    //     // TODO: I think there is no need for lock here.
+    //     lock (lockAcceptedMethod)
+    //     {
+    //         int count = InsertOrIncrementAcceptedValue(request.AcceptedValue.Leases.ToList());
+    //         if (count == QUORUM_SIZE)
+    //         {
+    //             Console.WriteLine($"[{nodeId}] Quorum was reached on {request.AcceptedValue}");
+    //             Decide();
+    //         }
+    //     }
+    //     return Task.FromResult(new Empty());
+    // }
 
     private void BroadcastPrepareRequest(CancellationTokenSource tokenSource, CancellationToken ct)
     {
@@ -428,15 +428,15 @@ public class PaxosService : Paxos.PaxosBase
         acceptedValues.AddOrUpdate(leases, 1, (k, v) => v + 1);
 
 
-    private void Decide()
-    {
-        LeasesResponse response = new LeasesResponse
-        {
-            EpochId = currentEpoch,
-        };
-        response.Leases.Add(acceptedValues.First(v => v.Value == QUORUM_SIZE).Key);
-        //leaseManagerService.Send(response);
-    }
+    // private void Decide()
+    // {
+    //     LeasesResponse response = new LeasesResponse
+    //     {
+    //         EpochId = currentEpoch,
+    //     };
+    //     response.Leases.Add(acceptedValues.First(v => v.Value == QUORUM_SIZE).Key);
+    //     //leaseManagerService.Send(response);
+    // }
 
     private void CalculateNewCurrentEpochId(int minimumId)
     {
