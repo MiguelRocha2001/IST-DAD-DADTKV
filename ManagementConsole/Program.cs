@@ -1,11 +1,10 @@
 ﻿using System.Diagnostics;
+using utils;
 
-enum ProcessState { NORMAL, CRASHED }
-
-const string systemConfigFilePath = "../configuration_sample";
+const string systemConfigFilePath = "../configuration_sample1";
 // const string systemConfigFilePath = "C:/Users/migas/Repos/dad-project/configuration_sample";
 const string CLIENT_PROCESS_FILE_PATH = "../Client/bin/Debug/net6.0/Client";
-const string TRANSACTION_MANAGER_PROCESS_FILE_PATH = "../TransactionManager/bin/Debug/net6.0/TransactionManager";
+const string TRANSACTION_MANAGER_PROCESS_FILE_PATH = "../TransactionManager/bin/Debug/net6.0/TransactionManager.exe";
 const string LEASE_MANAGER_PROCESS_FILE_PATH = "../LeaseManager/bin/Debug/net6.0/LeaseManager";
 
 List<string[]> processesConfig = new List<string[]>();
@@ -20,65 +19,7 @@ int timeSlots = 0;
 string starts = "";
 int lasts = 0;
 
-List<List<ProcessState>> processesState = new List<List<ProcessState>>();
-
-void KillProcesses(HashSet<Process> processes)
-{
-    Console.WriteLine("Killing all processes!");
-    foreach (Process process in processes)
-    {
-        process.Kill();
-    }
-    Console.WriteLine("Processes killed!");
-}
-
-string GetTransactionManagerUrlsArgument()
-{
-    string transactionManagersArg = "[";
-    foreach (string transactionManagerUrl in transactionManagersUrls)
-    {
-        transactionManagersArg += transactionManagerUrl + ",";
-    }
-    transactionManagersArg = transactionManagersArg.Trim(','); // removes last comma
-    transactionManagersArg += "]";
-
-    return transactionManagersArg;
-}
-
-string BuildLeaseManagerArguments(string nodeId)
-{
-    string nodeIdArg = nodeId.Last().ToString();
-    string leaseManagersArg = "[";
-    foreach (string leaseManagerUrl in leaseManagersUrls)
-    {
-        leaseManagersArg += leaseManagerUrl + ",";
-    }
-    leaseManagersArg = leaseManagersArg.Trim(','); // removes last comma
-    leaseManagersArg += "]";
-
-    return nodeIdArg + " " + leaseManagersArg + " " + GetTransactionManagerUrlsArgument() + " " + timeSlots + " " + starts + " " + lasts;
-}
-
-string BuildTransactionManagerArguments(string nodeId, int processIndex)
-{
-    string nodeIdArg = nodeId.Last().ToString();
-    int quorumSize = leaseManagersUrls.Count;
-    return nodeIdArg + " " + GetTransactionManagerUrlsArgument() + " " + quorumSize + " " + timeSlots + " " + starts + " " + lasts + " " + BuildProcessStateArgument(processIndex);
-}
-
-string BuildProcessStateArgument(int processIndex)
-{
-    string processStateArg = "[";
-    List<ProcessState> processStates = processesState[processIndex]; // fetches process states for this process
-    foreach (ProcessState processState in processStates)
-    {
-        processStateArg += processState == ProcessState.NORMAL ? "N" : "C";
-        processStateArg += ",";
-    }
-    processStateArg = processStateArg.Trim(','); // removes last comma
-    processStateArg += "]";
-    return processStateArg;
-}
+Dictionary<int, List<ProcessState>> processesState = new Dictionary<int, List<ProcessState>>();
 
 // parse system script
 while (lines.MoveNext())
@@ -107,11 +48,14 @@ while (lines.MoveNext())
         else if (split[0] == "F")
         {
             int timeSlot = int.Parse(split[1]);
+            Console.WriteLine($"timeSlot: {timeSlot}");
+            List<ProcessState> states = new List<ProcessState>();
+            processesState[timeSlot-1] = states;
             foreach (string node in split[2..])
             {
                 if (node != "N" && node != "C") // N = normal, C = crashed
                     break;
-                processesState[timeSlot].Add(node == "N" ? ProcessState.NORMAL : ProcessState.CRASHED);
+                processesState[timeSlot-1].Add(node == "N" ? ProcessState.NORMAL : ProcessState.CRASHED);
             }
         }
     }
@@ -135,6 +79,12 @@ foreach (string[] processConfig in processesConfig)
 HashSet<Process> processes = new HashSet<Process>();
 try
 {
+    // var p_info = new ProcessStartInfo
+    // {
+    //     UseShellExecute = true,
+    //     CreateNoWindow = false,
+    //     WindowStyle = ProcessWindowStyle.Normal,
+    // };
     foreach (string[] processConfig in processesConfig)
     {
         int processIndex = processesConfig.IndexOf(processConfig);
@@ -144,20 +94,21 @@ try
             string processType = processConfig[2];
             string nodeId = processConfig[1];
 
-            string thirdArgument = processConfig[3];
+            //string host = processConfig[3].Split(':')[0] + ":" + processConfig[3].Split(':')[1];
+            string host = processConfig[3].Split(':')[1].Remove(0, 2);
+            string port = processConfig[3].Split(':')[2];
             
             Process newProcess = new Process();
-            processes.Add(newProcess);
 
             if (processType == "T") // Transaction Manager
             {
                 newProcess.StartInfo.FileName = TRANSACTION_MANAGER_PROCESS_FILE_PATH;
-                newProcess.StartInfo.Arguments = BuildTransactionManagerArguments(nodeId, processIndex);
+                newProcess.StartInfo.Arguments = Utils.BuildTransactionManagerArguments(nodeId, host, port, processIndex, transactionManagersUrls, leaseManagersUrls, timeSlots, starts, lasts, processesState);
             }
             else if (processType == "L") // Lease Manager
             {
                 newProcess.StartInfo.FileName = LEASE_MANAGER_PROCESS_FILE_PATH;
-                newProcess.StartInfo.Arguments = BuildLeaseManagerArguments(nodeId);
+                newProcess.StartInfo.Arguments = Utils.BuildLeaseManagerArguments(nodeId, host, port, transactionManagersUrls, leaseManagersUrls, timeSlots, starts, lasts);
             }
             else // Client
             {
@@ -165,36 +116,25 @@ try
                 newProcess.StartInfo.FileName = CLIENT_PROCESS_FILE_PATH;
                 newProcess.StartInfo.Arguments = clientScript;
             }
-                                                
-            newProcess.Start();
+
+            //newProcess.StartInfo.CreateNoWindow = false;
+            newProcess.StartInfo.UseShellExecute = true;
+            //newProcess.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+            bool t = newProcess.Start();
+            //Console.WriteLine($"Giro: {newProcess.StartInfo.CreateNoWindow}");
+            //Console.WriteLine($"Giro: {newProcess.StartInfo.UseShellExecute}");
+            //Console.WriteLine($"Giro: {newProcess.StartInfo.WindowStyle}");
+            Console.WriteLine("Process start result: " + t);
             Console.WriteLine("Process started.");
-            
+            processes.Add(newProcess);
         }
     }
 }
-catch
+catch (Exception e)
 {
-    KillProcesses(processes);
-    return;
+    Console.WriteLine(e.Message);
+    Utils.KillProcesses(processes);
 }
 
 Console.ReadLine();
-KillProcesses(processes);
-
-/*
-int count = 0;
-List<Task> tasks = new();
-for (int i = 0; i < 30; i++){
-    var a = i;
-    tasks.Add(Task.Run(async () =>
-    {
-        await Task.Delay(1000);
-        Interlocked.Increment(ref count);
-        Console.WriteLine($"Count inside task {a} {count}");
-    }));
-}
-
-Task.WaitAll(tasks.ToArray());
-
-Console.WriteLine($"Count Outside task {count}");
-*/
+Utils.KillProcesses(processes);

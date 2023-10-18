@@ -1,0 +1,25 @@
+# DAD 2023-24 sample configuration script
+#
+# A line starting with a '#' character is a comment.
+#
+# There are no empty lines in a script.
+# You can assume the scripts are correct and contain
+# no impossible situations.
+# 
+# Process P commands appear always before client P commands.
+#
+# A P command for a server has a string indentifying the server e.g. "TM1"
+# a character indicating whether it's a (T)ransaction or (L)ease manager
+# and a URL for g-RPC calls.
+P LeaseManager0 L http://1.2.3.5:6001
+P LM1 L http://1.2.3.5:6002
+P TM0 T http://1.2.3.4:5001
+#
+# this test will run for 100 time slots.
+S 100
+#
+# this test starts at 15:30:15 (physical wall time)
+T 20:18:05
+#
+# Each time slots lasts 10000 miliseconds
+D 15000

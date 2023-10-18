@@ -1,4 +1,0 @@
-dotnet run --urls "http://localhost:6001"
-dotnet run --urls "http://localhost:6002"
-dotnet run --urls "http://localhost:6003"
-dotnet run --urls "http://localhost:6004"
