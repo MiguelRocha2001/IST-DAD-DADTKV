@@ -12,7 +12,7 @@ static List<(int, string)> FromStringToNodes(string leaseManagerUrls)
 
     List<(int, string)> nodes = new List<(int, string)>();
     string[] leaseManagersUrlsAux = leaseManagerUrls.Split(',');
-    foreach(string serverUlr in leaseManagersUrlsAux )
+    foreach (string serverUlr in leaseManagersUrlsAux)
     {
         string[] split = serverUlr.Split(':');
         nodes.Add((int.Parse(split[2]), serverUlr));
@@ -71,6 +71,8 @@ List<(int, string)> transactionManagerServers;
 int timeSlots;
 string? starts;
 int lasts;
+ServerState[] serverState;
+List<HashSet<int>> suspectedNodes;
 
 if (args.Length > 1)
 {
@@ -79,8 +81,16 @@ if (args.Length > 1)
     timeSlots = int.Parse(args[3]);
     starts = args[4];
     lasts = int.Parse(args[5]);
+    serverState = new ServerState[]
+    {
+        ServerState.Crashed, ServerState.Normal, ServerState.Crashed, ServerState.Crashed,
+    };
+    suspectedNodes = new()
+    {
+        new(), new(), new(), new(){1}
+    };
 }
-else 
+else
 {
     leaseManagerServers = new List<(int, string)> {
         (6001, "http://localhost:6001"),
@@ -91,9 +101,31 @@ else
         (5001, "http://localhost:5001"),
         (5002, "http://localhost:5002"),
     };
-    timeSlots = 10;
+    timeSlots = 4;
     starts = null;
-    lasts = 10;
+    lasts = 30;
+    if (nodeId == 1)
+    {
+        serverState = new ServerState[]
+        {
+            //ServerState.Crashed, ServerState.Normal, ServerState.Crashed, ServerState.Crashed,
+            ServerState.Normal, ServerState.Normal, ServerState.Crashed, ServerState.Crashed,
+        };
+        suspectedNodes = new(){
+            new(), new(){0}, new(), new(){0}
+        };
+    }
+    else
+    {
+        serverState = new ServerState[]
+        {
+            ServerState.Normal, ServerState.Normal, ServerState.Normal, ServerState.Normal,
+        };
+
+        suspectedNodes = new(){
+            new(), new(), new(), new()
+        };
+    }
 }
 
 string ip = Dns.GetHostEntry("localhost").AddressList[0].ToString();
@@ -106,12 +138,24 @@ List<LeaseRequest> requests = new List<LeaseRequest>();
 AcceptedValue acceptedValue = new AcceptedValue();
 
 LeaseManagerService leaseManagerService = new LeaseManagerService(nodeId, GetChannels(transactionManagerServers));
-PaxosService paxosService = new PaxosService(nodeId, GetChannels(leaseManagerServers), leaseManagerService, timeSlots, lasts);
+PaxosService paxosService = new PaxosService(
+    nodeId,
+    GetChannels(leaseManagerServers),
+    leaseManagerService,
+    timeSlots,
+    lasts,
+    serverState,
+    suspectedNodes);
 
 // Add services to the container.
-builder.Services.AddGrpc();
+builder.Services.AddGrpc().AddServiceOptions<PaxosService>(options =>
+{
+    options.Interceptors.Add<PaxosInterceptor>();
+});
+
 builder.Services.AddSingleton<PaxosService>(paxosService);
 builder.Services.AddSingleton<LeaseManagerService>(leaseManagerService);
+builder.Services.AddSingleton<PaxosInterceptor>();
 
 var app = builder.Build();
 

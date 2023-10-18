@@ -3,11 +3,12 @@ Questions:
 
 [ ] PropagateTransaction -> Transaction, bool released
 
-[ ] Use epoch in LM
+[x] Use epoch in LM
 
-[ ] Use Suspect/Crashed for LM
+[x] Use Suspect/Crashed for LM
 
 [ ] Status operation
 
 [ ] Management Console
 
+[ ] Cancelar Send de leases
