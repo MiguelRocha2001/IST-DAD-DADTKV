@@ -29,28 +29,34 @@ class Utils
         return transactionManagersArg;
     }
 
-    static public string BuildLeaseManagerArguments(
-        string nodeId, 
-        string host,
-        string port,
-        List<String> transactionManagersUrls,
-        List<String> leaseManagersUrls,
-        int timeSlots,
-        string starts,
-        int lasts
-    ) 
+    static string GetLeaseManagerUrlsArgument(List<string> leaseManagerUrls)
     {
-        string nodeIdArg = nodeId.Last().ToString();
         string leaseManagersArg = "";
-        foreach (string leaseManagerUrl in leaseManagersUrls)
+        foreach (string leaseManagerUrl in leaseManagerUrls)
         {
             leaseManagersArg += leaseManagerUrl + ",";
         }
         leaseManagersArg = leaseManagersArg.Trim(','); // removes last comma
         leaseManagersArg += "";
 
-        string t = nodeIdArg + " " + host + " " + port + " " + leaseManagersArg + " " + GetTransactionManagerUrlsArgument(transactionManagersUrls) + " " + timeSlots + " " + starts + " " + lasts;
-        return t;
+        return leaseManagersArg;
+    }
+
+    static public string BuildLeaseManagerArguments(
+        string nodeId, 
+        string host,
+        string port,
+        int processIndex,
+        List<String> transactionManagersUrls,
+        List<String> leaseManagersUrls,
+        int timeSlots,
+        string starts,
+        int lasts,
+        Dictionary<int, List<ProcessState>> processesState
+    ) 
+    {
+        string nodeIdArg = nodeId.Last().ToString();
+        return nodeIdArg + " " + host + " " + port + " " + GetLeaseManagerUrlsArgument(leaseManagersUrls) + " " + GetTransactionManagerUrlsArgument(transactionManagersUrls) + " " + timeSlots + " " + starts + " " + lasts + " " + BuildProcessStateArgument(processIndex, processesState);
     }
 
     static public string BuildTransactionManagerArguments(
@@ -67,8 +73,8 @@ class Utils
     )
     {
         string nodeIdArg = nodeId.Last().ToString();
-        int quorumSize = leaseManagersUrls.Count;
-        return nodeIdArg + " " + host + " " + port + " " + GetTransactionManagerUrlsArgument(transactionManagersUrls) + " " + quorumSize + " " + timeSlots + " " + starts + " " + lasts + " " + BuildProcessStateArgument(processIndex, processesState);
+        //int quorumSize = leaseManagersUrls.Count; TODO: maybe send also quorum size
+        return nodeIdArg + " " + host + " " + port + " " + GetTransactionManagerUrlsArgument(transactionManagersUrls) + " " + GetLeaseManagerUrlsArgument(leaseManagersUrls) + " " + timeSlots + " " + starts + " " + lasts + " " + BuildProcessStateArgument(processIndex, processesState);
     }
 
     static string BuildProcessStateArgument(
@@ -84,7 +90,6 @@ class Utils
         }
         processStateArg = processStateArg.Trim(','); // removes last comma
         processStateArg += "]";
-        Console.WriteLine("processStateArg: " + processStateArg);
         return processStateArg;
     }
 }

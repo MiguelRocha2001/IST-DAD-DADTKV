@@ -8,21 +8,21 @@ using utils;
 
 var builder = WebApplication.CreateBuilder(args);
 
-Console.WriteLine("Args: " + string.Join(" ", args));
-
 var nodeId = int.Parse(args[0]);
 string host = args[1];
 int port = int.Parse(args[2]);
 var leaseManagerServers = args[3].Split(',');
 var transactionManagerServers = args[4].Split(',');
 int timeSlots = int.Parse(args[5]);
-string? starts = args[6];
+string? starts = args[6] == "null" ? null : args[6];
 int lasts = int.Parse(args[7]);
+ServerState[] serverState = Utils.FromStringToServerState(args[8]);
+/*
 var serverState = new ServerState[]
 {
     ServerState.Normal, ServerState.Normal, ServerState.Normal, ServerState.Normal,
 };
-
+*/
 List<HashSet<int>> suspectedNodes = new(){
     new(), new(), new(), new()
 };

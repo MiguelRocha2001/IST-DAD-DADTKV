@@ -21,13 +21,13 @@ class Utils {
         return nodes;
     }
 
-    public static GrpcChannel[] GetChannels(List<(int, string)> nodes)
+    static public GrpcChannel[] GetChannels(string[] nodes)
     {
-        GrpcChannel[] channels = new GrpcChannel[nodes.Count];
+        GrpcChannel[] channels = new GrpcChannel[nodes.Length];
         int i = 0;
         foreach (var node in nodes)
         {
-            channels[i] = GrpcChannel.ForAddress(node.Item2);
+            channels[i] = GrpcChannel.ForAddress(node);
             i++;
         }
         return channels;

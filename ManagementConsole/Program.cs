@@ -4,7 +4,7 @@ using utils;
 const string systemConfigFilePath = "../configuration_sample1";
 // const string systemConfigFilePath = "C:/Users/migas/Repos/dad-project/configuration_sample";
 const string CLIENT_PROCESS_FILE_PATH = "../Client/bin/Debug/net6.0/Client";
-const string TRANSACTION_MANAGER_PROCESS_FILE_PATH = "../TransactionManager/bin/Debug/net6.0/TransactionManager.exe";
+const string TRANSACTION_MANAGER_PROCESS_FILE_PATH = "../TransactionManager/bin/Debug/net6.0/TransactionManager";
 const string LEASE_MANAGER_PROCESS_FILE_PATH = "../LeaseManager/bin/Debug/net6.0/LeaseManager";
 
 List<string[]> processesConfig = new List<string[]>();
@@ -108,7 +108,7 @@ try
             else if (processType == "L") // Lease Manager
             {
                 newProcess.StartInfo.FileName = LEASE_MANAGER_PROCESS_FILE_PATH;
-                newProcess.StartInfo.Arguments = Utils.BuildLeaseManagerArguments(nodeId, host, port, transactionManagersUrls, leaseManagersUrls, timeSlots, starts, lasts);
+                newProcess.StartInfo.Arguments = Utils.BuildLeaseManagerArguments(nodeId, host, port, processIndex, transactionManagersUrls, leaseManagersUrls, timeSlots, starts, lasts, processesState);
             }
             else // Client
             {
@@ -125,7 +125,6 @@ try
             //Console.WriteLine($"Giro: {newProcess.StartInfo.UseShellExecute}");
             //Console.WriteLine($"Giro: {newProcess.StartInfo.WindowStyle}");
             Console.WriteLine("Process start result: " + t);
-            Console.WriteLine("Process started.");
             processes.Add(newProcess);
         }
     }

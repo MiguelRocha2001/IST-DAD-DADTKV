@@ -13,42 +13,16 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddGrpc();
 
-int nodeId = int.Parse(args[0]);
+var nodeId = int.Parse(args[0]);
+string host = args[1];
+int port = int.Parse(args[2]);
+var transactionManagerServers = args[3].Split(',');
+var leaseManagerServers = args[4].Split(',');
+int timeSlots = int.Parse(args[5]);
+string? starts = args[6] == "null" ? null : args[6];
+int lasts = int.Parse(args[7]);
 
-List<(int, string)> transactionManagerServers;
-List<(int, string)> leaseManagerServers;
-int quorumSize; // same as the number of lease managers
-
-// TODO: this will be used to update the fault tolerance state of the process...
-int timeSlots;
-string? starts;
-int lasts;
-List<ProcessState> processState = new List<ProcessState>();
-
-if (args.Length > 1)
-{
-    transactionManagerServers = Utils.FromStringToNodes(args[1]);
-    throw new NotImplementedException("LeaseManagerServers parse not implemented!");
-    quorumSize = int.Parse(args[2]);
-    timeSlots = int.Parse(args[3]);
-    starts = args[4];
-    lasts = int.Parse(args[5]);
-}
-else
-{
-    transactionManagerServers = new List<(int, string)> {
-        (5001, "http://localhost:5001"),
-        (5002, "http://localhost:5002"),
-    };  
-    leaseManagerServers = new List<(int, string)> {
-        (6001, "http://localhost:6001"),
-        (6002, "http://localhost:6002"),
-    };
-    quorumSize = 2;
-    timeSlots = 10;
-    starts = null;
-    lasts = 10;
-}
+int quorumSize = leaseManagerServers.Count() / 2 + 1;
 
 if (starts is not null) // used for testing only
 {
@@ -62,16 +36,15 @@ if (starts is not null) // used for testing only
 DadTkvService dadTkvService = new DadTkvService(
     Utils.GetChannels(transactionManagerServers),
     Utils.GetChannels(leaseManagerServers), 
-    transactionManagerServers[nodeId].Item2, 
+    transactionManagerServers[nodeId], 
     nodeId
 );
 LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService, quorumSize);
 TransactionManagerService transactionManagerService = new TransactionManagerService(dadTkvService);
 
-string ip = Dns.GetHostEntry("localhost").AddressList[0].ToString();
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Listen(IPAddress.Parse(ip), transactionManagerServers[nodeId].Item1);
+    options.Listen(IPAddress.Parse(host), port);
 });
 
 

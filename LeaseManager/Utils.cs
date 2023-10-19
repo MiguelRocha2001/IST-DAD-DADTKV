@@ -1,4 +1,5 @@
 using Grpc.Net.Client;
+using LeaseManager.Services;
 
 namespace utils;
 
@@ -58,5 +59,37 @@ class Utils
         if (totalSeconds < 0)
             throw new Exception("startTime is in the past!");
         return totalSeconds;
+    }
+
+    public static ServerState[] FromStringToServerState(string statesStr)
+    {
+        statesStr = statesStr.Trim('[');
+        statesStr = statesStr.Trim(']');
+
+        ServerState[] state = {};
+
+        int index = 0;
+        foreach(string stateAux in statesStr.Split(","))
+        {
+            int epoch = int.Parse(stateAux[0].ToString());
+            if (epoch == index)
+            {
+                ServerState serverState1 = stateAux[1] == 'N' ? ServerState.Normal : ServerState.Crashed;
+                state = state.Append(serverState1).ToArray();
+                index++;
+            }
+            else
+            {
+                ServerState serverState1 = state[index-1];
+                for(int i = 0, times = epoch - index; i < times; i++)
+                {
+                    state = state.Append(serverState1).ToArray();
+                    index++;                    
+                }
+                ServerState serverState2 = stateAux[1] == 'N' ? ServerState.Normal : ServerState.Crashed;
+                state = state.Append(serverState2).ToArray();
+            }
+        }
+        return state;
     }
 }

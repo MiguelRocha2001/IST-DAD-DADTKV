@@ -11,15 +11,19 @@
 # A P command for a server has a string indentifying the server e.g. "TM1"
 # a character indicating whether it's a (T)ransaction or (L)ease manager
 # and a URL for g-RPC calls.
-P LeaseManager0 L http://1.2.3.5:6001
-P LM1 L http://1.2.3.5:6002
-P TM0 T http://1.2.3.4:5001
+P LeaseManager0 L http://127.0.0.1:6001
+P LM1 L http://127.0.0.1:6002
+P TM0 T http://127.0.0.1:5001
 #
 # this test will run for 100 time slots.
 S 100
 #
 # this test starts at 15:30:15 (physical wall time)
-T 20:18:05
+T null
 #
 # Each time slots lasts 10000 miliseconds
 D 15000
+#
+F 1 N N N N N N (TM1,TM2) (lease3,LM2)
+F 2 N N C N N N (TM1,TM2)
+F 5 C N C N N N (TM1,TM2)
