@@ -38,6 +38,9 @@ public class PaxosService : Paxos.PaxosBase
     // ConcurrentDictionary<List<Lease>, int> acceptedValues = new(new ListLeaseComparator());
     AcceptedValue? highestAcceptedValue = null;
 
+    CancellationTokenSource CancelLease;
+    CancellationToken CancelLeaseToken;
+
     public PaxosService(
         int nodeId,
         GrpcChannel[] nodes,
@@ -59,6 +62,8 @@ public class PaxosService : Paxos.PaxosBase
         this.slotTime = slotTime;
         this.serverState = serverState; 
         this.suspectedNodes = suspectedNodes;
+        this.CancelLease = new CancellationTokenSource();
+        this.CancelLeaseToken =  this.CancelLease.Token;
     }
 
     public async void Init()
@@ -78,6 +83,9 @@ public class PaxosService : Paxos.PaxosBase
             startEpochTime = null;
             // acceptedValues.Clear();
             highestAcceptedValue = null;
+            CancelLease.Cancel();
+            CancelLease = new ();
+            CancelLeaseToken = CancelLease.Token;
         }
 
         // TODO: Handle cancellation more gracefully
@@ -195,7 +203,7 @@ public class PaxosService : Paxos.PaxosBase
             {
                 EpochId = currentEpoch,
                 Leases = { request.AcceptedValue.Leases }
-            }));
+            }, CancelLeaseToken), CancelLeaseToken);
 
             // if (count == QUORUM_SIZE)
             // {
@@ -286,8 +294,7 @@ public class PaxosService : Paxos.PaxosBase
                                         {
                                             EpochId = currentEpoch,
                                             Leases = { leases }
-                                        });
-                                        // Console.WriteLine($"");
+                                        }, ct);
                                         acceptedValue.Leases.Add(leases);
                                     }
                                     acceptedValue.Id = currentEpochId;

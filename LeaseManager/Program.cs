@@ -7,6 +7,17 @@ using utils;
 
 
 var builder = WebApplication.CreateBuilder(args);
+Console.WriteLine(string.Join(" ", args));
+
+if (args.Length == 1)
+{
+    args = 
+        ($"{args[0]} 127.0.0.1 600{int.Parse(args[0])+1} "+
+        "http://127.0.0.1:6001,http://127.0.0.1:6002 http://127.0.0.1:5001 "+
+        "100 null 15 [0N,1C,4N]").Split(" ");
+}
+
+Console.WriteLine(string.Join(' ', args));
 
 var nodeId = int.Parse(args[0]);
 string host = args[1];

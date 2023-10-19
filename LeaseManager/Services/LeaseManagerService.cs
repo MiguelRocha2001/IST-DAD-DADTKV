@@ -40,8 +40,9 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
     }
 
     
-    public void Send(LeasesResponse response)
+    public void Send(LeasesResponse response, CancellationToken ct)
     {
+        var epoch = response.EpochId;
         for (int id = 0; id < nodes.Count(); id++)
         {
             var idAux = id;
@@ -56,22 +57,25 @@ public class LeaseManagerService : LeaseService.LeaseServiceBase
                         client.SendLeases(response);
                         break;
                     }
-                    catch (Exception e)
+                    catch (Exception)
                     {
-                        await BroadcastExceptionHandler(nodeId, requestTries);
+                        if (ct.IsCancellationRequested){
+                            break;
+                        }
+                        await BroadcastExceptionHandler(nodeId, requestTries, epoch);
                         requestTries++;
                     }
                 }
-            });
+            }, ct);
         }
     }
 
     /**
         Prints exception message, awaits for backoffTimeout and returns the new backoffTimeout.
     */
-    async private Task BroadcastExceptionHandler(int id, int tries)
+    async private Task BroadcastExceptionHandler(int id, int tries, int epoch)
     {
-        Console.WriteLine($"[{nodeId}] Trying to resend Leases to TransactionManager: {id} [{tries}]");
+        Console.WriteLine($"[{nodeId}] Trying to resend Leases to TransactionManager. Epoch: {epoch}, Tries: {tries}");
         await Task.Delay(tries * 2 * 1000);
     }
 }
