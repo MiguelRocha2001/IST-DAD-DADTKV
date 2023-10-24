@@ -20,8 +20,9 @@ public class DadTkvService : DADTKV.DADTKVBase
     public DadTkvService(
         GrpcChannel[] transactionManagerNodes,
         GrpcChannel[] leaseManagerNodes,
-        string nodeUrl, 
-        int nodeId
+        string[] transactionManagerIds,
+        string nodeId,
+        string nodeUrl
     )
     {
         this.transactionManagerNodes = transactionManagerNodes;

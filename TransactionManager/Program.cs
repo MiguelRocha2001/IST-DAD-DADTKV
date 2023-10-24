@@ -13,16 +13,20 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddGrpc();
 
-var nodeId = int.Parse(args[0]);
+var nodeId = args[0];
 string host = args[1];
 int port = int.Parse(args[2]);
-var transactionManagerServers = args[3].Split(',');
-var leaseManagerServers = args[4].Split(',');
-int timeSlots = int.Parse(args[5]);
-string? starts = args[6] == "null" ? null : args[6];
-int lasts = int.Parse(args[7]);
+string[] transactionManagerServersIds = args[3].Split(',');
+var transactionManagerServersUrls = args[4].Split(',');
+var leaseManagerServersUrls = args[5].Split(',');
+int timeSlots = int.Parse(args[6]);
+string? starts = args[7] == "null" ? null : args[6];
+int lasts = int.Parse(args[8]);
 
-int quorumSize = leaseManagerServers.Count() / 2 + 1;
+int nodeIndex = transactionManagerServersIds.ToList().IndexOf(nodeId);
+string nodeUrl = transactionManagerServersUrls[nodeIndex];
+
+int quorumSize = leaseManagerServersUrls.Count() / 2 + 1;
 
 if (starts is not null) // used for testing only
 {
@@ -34,11 +38,13 @@ if (starts is not null) // used for testing only
 }
 
 DadTkvService dadTkvService = new DadTkvService(
-    Utils.GetChannels(transactionManagerServers),
-    Utils.GetChannels(leaseManagerServers), 
-    transactionManagerServers[nodeId], 
-    nodeId
+    Utils.GetChannels(transactionManagerServersUrls),
+    Utils.GetChannels(leaseManagerServersUrls),
+    transactionManagerServersIds,
+    nodeId,
+    nodeUrl
 );
+
 LeaseManagerService leaseManagerService = new LeaseManagerService(dadTkvService, quorumSize);
 TransactionManagerService transactionManagerService = new TransactionManagerService(dadTkvService);
 

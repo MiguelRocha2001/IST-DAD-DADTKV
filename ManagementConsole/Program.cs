@@ -7,12 +7,15 @@ const string CLIENT_PROCESS_FILE_PATH = "../Client/bin/Debug/net6.0/Client";
 const string TRANSACTION_MANAGER_PROCESS_FILE_PATH = "../TransactionManager/bin/Debug/net6.0/TransactionManager";
 const string LEASE_MANAGER_PROCESS_FILE_PATH = "../LeaseManager/bin/Debug/net6.0/LeaseManager";
 
+const bool START_PROCESSES = true;
+
 List<string[]> processesConfig = new List<string[]>();
 // for some reason, running in debug mode, the client script file is not found (he assumes a different path, not sure why)
 IEnumerator<string> lines = File.ReadLines(systemConfigFilePath).GetEnumerator(); 
 
-List<String> transactionManagersUrls = new List<string>();
-List<String> leaseManagersUrls = new List<string>();
+List<string> transactionManagersIds = new List<string>();
+List<string> transactionManagersUrls = new List<string>();
+List<string> leaseManagersUrls = new List<string>();
 
 // TODO: later check if they are unseiged
 int timeSlots = 0;
@@ -20,6 +23,7 @@ string starts = "";
 int lasts = 0;
 
 Dictionary<int, List<ProcessState>> processesState = new Dictionary<int, List<ProcessState>>();
+Dictionary<int, HashSet<Tuple<string, string>>> processesSuspectedNodes = new Dictionary<int, HashSet<Tuple<string, string>>>();
 
 // parse system script
 while (lines.MoveNext())
@@ -48,14 +52,19 @@ while (lines.MoveNext())
         else if (split[0] == "F")
         {
             int timeSlot = int.Parse(split[1]);
-            Console.WriteLine($"timeSlot: {timeSlot}");
-            List<ProcessState> states = new List<ProcessState>();
-            processesState[timeSlot-1] = states;
-            foreach (string node in split[2..])
+            //Console.WriteLine($"timeSlot: {timeSlot}");
+            processesState[timeSlot-1] = new List<ProcessState>();
+            processesSuspectedNodes[timeSlot - 1] = new HashSet<Tuple<string, string>>();
+            foreach (string state in split[2..])
             {
-                if (node != "N" && node != "C") // N = normal, C = crashed
-                    break;
-                processesState[timeSlot-1].Add(node == "N" ? ProcessState.NORMAL : ProcessState.CRASHED);
+                if (state == "N" || state == "C") // N = normal, C = crashed
+                    processesState[timeSlot-1].Add(state == "N" ? ProcessState.NORMAL : ProcessState.CRASHED);
+                else
+                {
+                    string nodesClean = state.Trim('(').Trim(')');
+                    string[] nodesCleanSplit = nodesClean.Split(',');
+                    processesSuspectedNodes[timeSlot - 1].Add(new Tuple<string, string>(nodesCleanSplit[0], nodesCleanSplit[1]));
+                }
             }
         }
     }
@@ -67,6 +76,7 @@ foreach (string[] processConfig in processesConfig)
     string processType = processConfig[2];
     if (processType.StartsWith("T"))
     {
+        transactionManagersIds.Add(processConfig[1]);
         transactionManagersUrls.Add(processConfig[3]);
     }
     else if (processType.StartsWith("L"))
@@ -94,7 +104,6 @@ try
             string processType = processConfig[2];
             string nodeId = processConfig[1];
 
-            //string host = processConfig[3].Split(':')[0] + ":" + processConfig[3].Split(':')[1];
             string host = processConfig[3].Split(':')[1].Remove(0, 2);
             string port = processConfig[3].Split(':')[2];
             
@@ -103,12 +112,40 @@ try
             if (processType == "T") // Transaction Manager
             {
                 newProcess.StartInfo.FileName = TRANSACTION_MANAGER_PROCESS_FILE_PATH;
-                newProcess.StartInfo.Arguments = Utils.BuildTransactionManagerArguments(nodeId, host, port, processIndex, transactionManagersUrls, leaseManagersUrls, timeSlots, starts, lasts, processesState);
+                newProcess.StartInfo.Arguments = Utils.BuildManagerArguments(
+                    Utils.ProcessType.TRANSACTION_MANAGER,
+                    nodeId, 
+                    host, 
+                    port,
+                    processIndex, 
+                    transactionManagersIds,
+                    transactionManagersUrls, 
+                    leaseManagersUrls, 
+                    timeSlots, 
+                    starts, 
+                    lasts, 
+                    processesState, 
+                    processesSuspectedNodes
+                );
             }
             else if (processType == "L") // Lease Manager
             {
                 newProcess.StartInfo.FileName = LEASE_MANAGER_PROCESS_FILE_PATH;
-                newProcess.StartInfo.Arguments = Utils.BuildLeaseManagerArguments(nodeId, host, port, processIndex, transactionManagersUrls, leaseManagersUrls, timeSlots, starts, lasts, processesState);
+                newProcess.StartInfo.Arguments = Utils.BuildManagerArguments(
+                    Utils.ProcessType.LEASE_MANAGER,
+                    nodeId, 
+                    host, 
+                    port,
+                    processIndex, 
+                    transactionManagersIds,
+                    transactionManagersUrls, 
+                    leaseManagersUrls, 
+                    timeSlots, 
+                    starts, 
+                    lasts, 
+                    processesState, 
+                    processesSuspectedNodes
+                );
             }
             else // Client
             {
@@ -120,20 +157,27 @@ try
             //newProcess.StartInfo.CreateNoWindow = false;
             newProcess.StartInfo.UseShellExecute = true;
             //newProcess.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-            bool t = newProcess.Start();
             //Console.WriteLine($"Giro: {newProcess.StartInfo.CreateNoWindow}");
             //Console.WriteLine($"Giro: {newProcess.StartInfo.UseShellExecute}");
             //Console.WriteLine($"Giro: {newProcess.StartInfo.WindowStyle}");
-            Console.WriteLine("Process start result: " + t);
-            processes.Add(newProcess);
+
+            if (START_PROCESSES)
+            {
+                bool result = newProcess.Start();
+                Console.WriteLine("Process start result: " + result);
+                processes.Add(newProcess);
+            }
         }
     }
 }
 catch (Exception e)
 {
-    Console.WriteLine(e.Message);
-    Utils.KillProcesses(processes);
+    Console.WriteLine(e.StackTrace);
+    if (START_PROCESSES)
+        Utils.KillProcesses(processes);
 }
 
 Console.ReadLine();
-Utils.KillProcesses(processes);
+
+if (START_PROCESSES)
+    Utils.KillProcesses(processes);

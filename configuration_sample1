@@ -11,19 +11,33 @@
 # A P command for a server has a string indentifying the server e.g. "TM1"
 # a character indicating whether it's a (T)ransaction or (L)ease manager
 # and a URL for g-RPC calls.
-P LeaseManager0 L http://127.0.0.1:6001
-P LM1 L http://127.0.0.1:6002
-P TM0 T http://127.0.0.1:5001
+P TM0 T http://1.2.3.4:5001
+P TM1 T http://1.2.3.4:5002
+P LeaseManager0 L http://1.2.3.5:6001
+P LM1 L http://1.2.3.5:6002
 #
 # this test will run for 100 time slots.
 S 100
 #
 # this test starts at 15:30:15 (physical wall time)
-T null
+T 20:18:05
 #
 # Each time slots lasts 10000 miliseconds
-D 15000
+D 10000 
 #
+# F commands describe the state of server processes
+#
+# Missing time slots in the sequence of F commands correspond to time slots 
+# where there is no change to the normal/crashed state of the previous 
+# slot and no process suspects any other process.
+#
+# In a F command:
+# - The first integer indentifies the time slot it describes
+# - It is followed by a sequence of (N)ormal or (C)rashed characters,
+#   one for each server process in the system
+# - The line ends with a sequence of pairs indentifying suspected processes
+# each pair includes the ids of the suspecting process and the suspected process,
+# e.g. (A,B) means that process A suspects process B
 F 1 N N N N N N (TM1,TM2) (lease3,LM2)
 F 2 N N C N N N (TM1,TM2)
 F 5 C N C N N N (TM1,TM2)
